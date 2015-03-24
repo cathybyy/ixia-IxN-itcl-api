@@ -680,4 +680,4 @@ set clickVal [ clock clicks ]
 set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
 
 IxDebugOn
-IxDebugCmdOn
+# IxDebugCmdOn
