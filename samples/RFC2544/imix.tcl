@@ -31,8 +31,8 @@ Port @tester_to_dta2 192.168.0.21/1/10
 	-dst_endpoint "@tester.route_block(3) @tester.route_block(4)" \
 	-latency_type "lifo" -traffic_mesh "fullmesh" -duration "30" \
 	-port_load {100 80 100} \
-	-resultdir "H:/2001----SR/SR-performance/data/" \
+	-resultdir "H:/data/" \
 	-frame_len_type "imix" \
-	-resultfile "RT_CASE_PERF.00001_v600r008c10b300_20140607130434mix.csv" \
+	-resultfile "20140607130434mix.csv" \
 	-frame_len {64 20 256 20 576 20 1200 10 1500 10 9600 20} \
 	-traffic_type "ipv4"

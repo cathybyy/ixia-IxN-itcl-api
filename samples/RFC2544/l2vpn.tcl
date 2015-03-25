@@ -33,7 +33,7 @@
  @tester_to_dta1.traffic(1) config -load_unit "percent" -src "@tester_to_dta1.ldp(1).vc_lsp @tester_to_dta2.ldp(2).vc_lsp" -dst "@tester_to_dta3.host @tester_to_dta4.host" -traffic_pattern "pair" -stream_load "10"
  Tester::start_traffic
  Tester::stop_traffic
- Tester::save_config H:/2001----SR/SR-performance/data/RT_CASE_PERF.00100.ixncfg
+ Tester::save_config H:/data/RT_CASE_PERF.00100.ixncfg
  Rfc2544 @tester.rfc2544
  @tester.rfc2544 unconfig
- @tester.rfc2544 throughput -frame_len_type "custom" -streams "@tester_to_dta3.traffic(1) @tester_to_dta1.traffic(1)" -resultfile "RT_CASE_PERF.00100_V800R006C20B770-OC-CX-M2D0703_20140707114330.csv" -frame_len {128} -resultlvl "0" -measure_jitter "false"  -latency_type "lifo" -mac_learning "0" -duration "10" -port_load {100 10 100} -resultdir "H:/2001----SR/SR-performance/data/"
+ @tester.rfc2544 throughput -frame_len_type "custom" -streams "@tester_to_dta3.traffic(1) @tester_to_dta1.traffic(1)" -resultfile "20140707114330.csv" -frame_len {128} -resultlvl "0" -measure_jitter "false"  -latency_type "lifo" -mac_learning "0" -duration "10" -port_load {100 10 100} -resultdir "H:/data/"

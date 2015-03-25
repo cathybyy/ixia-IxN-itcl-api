@@ -56,4 +56,4 @@ Port @tester_to_dta3 192.168.0.21/1/11
  
  Rfc2544 @tester.rfc2544
  @tester.rfc2544 unconfig
- @tester.rfc2544 throughput -dst_endpoint "@tester.route_block(1) @tester.route_block(2) @tester.route_block(3)" -latency_type "lifo" -traffic_mesh "fullmesh" -duration "10" -port_load {100 80 100} -resultdir "D:/1002----impeller/SR-performance/data/" -frame_len_type "custom" -traffic_type "ipv4" -resultfile "RT_CASE_PERF.00042_v600r008c10b300_20140605170511.csv" -frame_len {64} -resultlvl "0" -src_endpoint "@tester.route_block(1) @tester.route_block(2) @tester.route_block(3)" -measure_jitter "false"
+ @tester.rfc2544 throughput -dst_endpoint "@tester.route_block(1) @tester.route_block(2) @tester.route_block(3)" -latency_type "lifo" -traffic_mesh "fullmesh" -duration "10" -port_load {100 80 100} -resultdir "D:/data/" -frame_len_type "custom" -traffic_type "ipv4" -resultfile "20140605170511.csv" -frame_len {64} -resultlvl "0" -src_endpoint "@tester.route_block(1) @tester.route_block(2) @tester.route_block(3)" -measure_jitter "false"
