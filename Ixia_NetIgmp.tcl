@@ -334,6 +334,19 @@ Deputs "----- TAG: $tag -----"
 						-sourceMode $filter_mode
 					ixNet commit
 					set hGroup [ ixNet remapIds $hGroup ]
+        Deputs "sourceip: $source_ip"
+                    if { $source_ip != "0.0.0.0" } {
+        Deputs Step48
+                        set hSource [ ixNet add $hGroup source ]
+        Deputs $hSource
+                        ixNet setM $hSource \
+                            -sourceRangeCount $source_num \
+			                -sourceRangeStart $source_ip
+                        ixNet commit
+                        set hSource [ixNet remapIds $hSource]
+                    }
+                    
+                    
 		Deputs Step50			
 		Deputs "group handle:$hGroup"
 		Deputs "group handle array names: [ array names group_handle ]"

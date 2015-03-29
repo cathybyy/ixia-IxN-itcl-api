@@ -37,6 +37,7 @@
 #		14. add -mac_learning in config
 # Version 1.11.4.60
 #		15. add net use to connect with IxNetwork Tcl Server
+#       16. change server to remote_server
 
 class Rfc2544 {
     inherit NetObject
@@ -88,7 +89,8 @@ body Rfc2544::constructor {} {
     set tag "body Rfc2544::ctor [info script]"
     Deputs "----- TAG: $tag -----"
     set testtype "rfcthroughput"
-    
+    IxDebugOn
+    IxDebugCmdOn
     
 	#reborn 
 }
@@ -115,6 +117,7 @@ body Rfc2544::config { args } {
     set inter_frame_gap 12
 	set no_run 0
 	set resultLevel 1
+    set regenerate "false"
 	
 	set frame_len_step 64
 	set frame_len_max  1518
@@ -244,11 +247,19 @@ Deputs "set result level:$value"
 				}				
 			}
 			-netuse_user {
-				set netuse_user $netuse_user
+				set netuse_user $value
 			}
 			-netuse_pw {
-				set netuse_pw $netuse_pw
+				set netuse_pw $value
 			}
+            -regenerate {
+                set trans [ BoolTrans $value ]
+				if { $trans == "1" || $trans == "0" } {
+					set regenerate $value
+				} else {
+					error "$errNumber(1) key:$key value:$value"
+				}	
+        	}
         	default {
         	    error "$errNumber(3) key:$key value:$value"
         	}
@@ -534,7 +545,7 @@ Deputs "Step120"
 	ixNet setM $handle/testConfig \
 		-calculateLatency True \
 		-binarySearchType $binary_mode \
-		-forceRegenerate True \
+		-forceRegenerate $regenerate \
 		-rfc2889ordering val2889Ordering \
 		-enableMinFrameSize True
 	ixNet setA $handle/learnFrames \
@@ -582,16 +593,16 @@ Deputs "Step150"
 
 
 	if { [ info exists resultdir ] } {
-		global server
-Deputs "server:$server"
+		global remote_server
+Deputs "remote_server:$remote_server"
 		set path [ ixNet getA $handle/results -resultPath ]
 Deputs "path:$path"
 		set colonIndex [ string first ":" $path ]
 		set path [ string replace $path $colonIndex $colonIndex "$" ]
-		if { $server == "localhost" } {
+		if { $remote_server == "localhost" } {
 			set path "//127.0.0.1/$path"
 		} else {
-			set path "//${server}/$path"
+			set path "//${remote_server}/$path"
 			catch {
 			# net use \\10.206.25.116\c$\ixia ixia2014! /user:YL
 				exec cmd "/k net use $path $netuse_pw /user:$netuse_user" &

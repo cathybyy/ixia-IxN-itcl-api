@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.62
+set releaseVersion 4.64
 #===============================================================================
 # Change made
 # ==2011==
@@ -252,6 +252,12 @@ set releaseVersion 4.62
 # Version 4.62
 #		116. Add compatibility to tbc file source
 #		117. Release on Oct 16th
+# Version 4.63
+#		118. Release on Dec 9th
+#       119. change server serverPort to remote_server remote_serverPort 
+# 2015
+# Version 4.64
+#       120. Release on Jun 8th
 
 proc GetEnvTcl { product } {
    
@@ -308,8 +314,8 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
     global trafficnamelist
     global tportlist
     
-	global server
-	global serverPort
+	global remote_server
+	global remote_serverPort
 	
 	set loginInfo $location
 puts "Login...$location"	
@@ -320,11 +326,11 @@ puts "Login...$location"
 	}
 
 	set portInfo [ split $port "/" ]
-	set server	 [ lindex $portInfo 0 ]
-	if { [ regexp {\d+\.\d+\.\d+\.\d+} $server ] || ( $server == "localhost" ) } {
+	set remote_server	 [ lindex $portInfo 0 ]
+	if { [ regexp {\d+\.\d+\.\d+\.\d+} $remote_server ] || ( $remote_server == "localhost" ) } {
 		set portInfo [ lreplace $portInfo 0 0 ]
 	} else {
-		set server localhost
+		set remote_server localhost
 	}
 	if { [ llength $portInfo ] == 0 } {
 		set portInfo 8009
@@ -333,12 +339,12 @@ puts "Login...$location"
     set flag 0
 	foreach port $portInfo {
 		ixNet disconnect
-		ixNet connect $server -version $ixN_tcl_v -port $port
+		ixNet connect $remote_server -version $ixN_tcl_v -port $port
 		set root [ ixNet getRoot]
 		if { $force } {
 			puts "Login successfully on port $port."
 			#return	
-			set serverPort $port
+			set remote_serverPort $port
             set flag 1            
 		} else {
 			if { [ llength [ ixNet getL $root vport ] ] > 0 } {
@@ -347,7 +353,7 @@ puts "Login...$location"
 			} else {
 				puts "Login successfully on port $port."
 				#return
-				set serverPort $port
+				set remote_serverPort $port
                 set flag 1
 			}
 		}
@@ -679,5 +685,5 @@ set timeVal  [ clock format [ clock seconds ] -format %Y%m%d_%H_%M ]
 set clickVal [ clock clicks ]
 set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
 
-# IxDebugOn
-# IxDebugCmdOn
+IxDebugOn
+IxDebugCmdOn

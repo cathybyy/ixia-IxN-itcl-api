@@ -148,7 +148,7 @@ Deputs "owner:$owner"
 
 		# Login before taking ownership
 		ixLogin $owner
-		# Take ownership of the ports weâ€™ll use
+		# Take ownership of the ports we¡¯ll use
 		set portList [ list [ eval list $chasId $card $port ] ]
 Deputs "portList:$portList"		
 		ixTakeOwnership $portList
