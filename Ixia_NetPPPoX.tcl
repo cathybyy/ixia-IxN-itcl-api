@@ -238,7 +238,7 @@ body PppoeHost::get_summary_stats {} {
     set tag "body PppoeHost::get_summary_stats [info script]"
 Deputs "----- TAG: $tag -----"
         
-# ç»Ÿè®¡é¡¹
+# Í³¼ÆÏî
 # attempted_count
 # avg_success_transaction_count
 # connected_success_count

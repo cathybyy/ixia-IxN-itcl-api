@@ -480,7 +480,7 @@ Deputs "filter name: $portName"
 
 	set status "down"
 
-	# downã€attemptã€initã€two_waysã€exstartã€exchangeã€loadingã€full	
+	# down¡¢attempt¡¢init¡¢two_ways¡¢exstart¡¢exchange¡¢loading¡¢full	
     if { $portFound } {
 		set down    	[ lindex $row $down_index ]
 		set attempt    	[ lindex $row $attempt_index ]
@@ -1038,7 +1038,7 @@ Deputs "filter name: $portName"
 
 	set status "down"
 
-	# downã€attemptã€initã€two_waysã€exstartã€exchangeã€loadingã€full	
+	# down¡¢attempt¡¢init¡¢two_ways¡¢exstart¡¢exchange¡¢loading¡¢full	
     if { $portFound } {
 		set down    	[ lindex $row $down_index ]
 		set attempt    	[ lindex $row $attempt_index ]

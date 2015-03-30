@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.50
+# Release Version 1.52
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -125,6 +125,10 @@
 #	63.add precedence_fullmesh in IPv4Hdr.config
 # Version 1.51.4.59
 #	64. fix bugs in bgp route range traffic in Traffic.config
+# Version 1.52.12.9
+#	65. add VxlanHdr
+# Version 1.53.1.15
+#	66. add Traffic::traffic_enable/traffic_disable
 
 # -- Class definition...
 class Traffic {
@@ -134,6 +138,9 @@ class Traffic {
     method config { args  } {}
     method enable {} {}
     method disable {} {}
+    method traffic_enable {} {}
+    method traffic_disable {} {}
+    method get_status {} {}
     method get_stats { args } {}
 	method get_stats_per_port { args } {}
     method get_hex_data {} {}
@@ -494,6 +501,8 @@ class GreHdr {
 
 	method config { args } {}
 }
+
+
 
 # -- Traffic implmentation
 body Traffic::constructor { port { hTraffic NULL } } {
@@ -1110,6 +1119,7 @@ Deputs "create raw stream..."
 		   }
 		   if { $flagPduObj } {
 			  set index 0
+              set pindex 0
 				if { $flag_modify_adv } {
 					set stackLevel [ expr [ llength [ ixNet getList $hStream stack ] ] - 1 ]
 				} else {
@@ -1125,12 +1135,14 @@ Deputs "create raw stream..."
 	Deputs Step14
 				 set type [ string toupper [ $name cget -type ] ]
 				 if { $type == "SET"  } {
-					if { $index == 0 } {
+					if { $pindex == 0 } {
 		Deputs "first ethernet set..."
 					 } else {
 						$name ChangeType APP
+                        set type [ string toupper [ $name cget -type ] ]
 					 }
 				 }
+                 incr pindex
 	Deputs "Type $type "
 				 set proStack [ GetProtocolTemp $protocol ]
 	Deputs "protocol stack: $proStack"
@@ -1933,6 +1945,44 @@ Deputs "----- TAG: $tag -----"
     return [ GetStandardReturnHeader ]
 
 }
+
+body Traffic::traffic_enable {} {
+    set tag "body Traffic::traffic_enable [info script]"
+Deputs "----- TAG: $tag -----"
+
+	if { [ string tolower [ ixNet getA $handle -enabled ] ] == "true" && [ string tolower [ ixNet getA $handle -suspend ] ] == "false" } {
+Deputs "no change."	
+		return [ GetStandardReturnHeader ]
+	}
+Deputs "enable:[ ixNet getA $handle -enabled ] suspend:[ ixNet getA $handle -suspend ]"
+	ixNet setA $handle -enabled True 
+	ixNet setA $handle -suspend False
+    ixNet commit
+	ixNet setA $handle -suspend False
+    ixNet commit
+		
+    return [ GetStandardReturnHeader ]
+}
+body Traffic::traffic_disable {} {
+    set tag "body Traffic::traffic_disable [info script]"
+Deputs "----- TAG: $tag -----"
+	ixNet setA $handle -enabled false
+	
+    ixNet commit
+	
+    return [ GetStandardReturnHeader ]
+
+}
+
+body Traffic::get_status {} {
+    set tag "body Traffic::get_status [info script]"
+Deputs "----- TAG: $tag -----"
+
+	set ret [ixNet getA $handle -enabled ]	
+    return $ret
+
+}
+
 body Traffic::GetProtocolTemp { pro } {
     set tag "body Traffic::GetProtocolTemp [info script]"
 Deputs "----- TAG: $tag -----"
@@ -11501,3 +11551,172 @@ body FipDescVlan::config { args } {
 
 }
 
+#Vxlan
+class VxlanHdr {
+	inherit Header
+	constructor {} { chain vxlan } { }
+	
+	method config { args } {}
+}
+
+body VxlanHdr::config { args } {
+    global errorInfo
+    global errNumber
+
+
+    set tag "body VxlanHdr::config [info script]"
+Deputs "----- TAG: $tag -----"
+	
+    set VniType Incrementing
+    set vxlan_flag 8
+    set vni_count  1
+    set vni_step   1    
+    
+  
+# param collection
+    foreach { key value } $args {
+	    set key [string tolower $key]
+	    switch -exact -- $key {
+		    -flag {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set vxlan_flag $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			    
+			 
+		    }
+		    -rev1 {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set  vxlan_rev1 $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			    			
+		    }
+		    -vni {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set  vxlan_vni $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			    
+			
+		    }
+		    -rev2 {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set  vxlan_rev2 $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			   
+			 
+		    }
+		    -vni_count {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set  vni_count $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			    
+			 
+		    }
+		    -vni_step {
+                set trans [ UnitTrans $value ]
+                if { [ string is integer $trans ] } {
+                    set  vni_step $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			    
+			
+		    }
+		    -vni_step_type {
+                	
+                set vni_step_type [ string tolower $value ]
+				switch $vni_step_type {
+					incr {
+						set VniType Incrementing
+					}
+					decr {
+						set VniType Decrementing
+					}
+					random {
+						set VniType Random
+					}
+				}                
+			
+		    }
+		  
+	    }
+    }
+		
+	
+#        $pdu Clear
+    set pro [ string tolower $protocol ]
+Deputs "Pro: $pro"
+    if { $pro != "vxlan" } {
+	   error "$errNumber(3) key:protocol value:$pro"
+    }
+    SetProtocol vxlan
+    #-----set Code Bits-----
+    if { [ info exists vxlan_flag ] } {
+	   AddField flags
+	   AddFieldMode Fixed
+	   AddFieldConfig $vxlan_flag
+    }
+    if { [ info exists vxlan_rev1 ] } {
+	   AddField reserved
+	   AddFieldMode Fixed
+	   AddFieldConfig $vxlan_rev1
+    }
+    
+    if { [ info exists vxlan_rev2 ] } {
+	   AddField reserved8
+	   AddFieldMode Fixed
+	   AddFieldConfig $vxlan_rev2
+    }
+    
+   
+    #--------------------------
+    #-----Config Port-----
+    if { [ info exists vxlan_vni ] } {
+
+	   if { [ info exists VniType ] } {
+
+		  switch -exact $VniType {
+			 Fixed {
+				AddFieldMode $VniType
+				AddField vni
+				AddFieldConfig $vxlan_vni
+			 }
+			 Decrementing -
+			 Incrementing {
+				if { [ info exists vni_count ] && [ info exists vni_step ] } {
+				    AddFieldMode $VniType
+				    AddField vni
+				    AddFieldConfig \
+				    [ list 0 $vxlan_vni $vni_count $vni_step ]
+				} else {
+				    error "$errNumber(2) key:vxlan_vni/vxlan_step"
+				}
+			 }
+		  }
+	   } 
+    }
+    
+    #--------------------------
+	eval chain $args
+    
+    if { [ IsValid ] } {
+	   return [GetStandardReturnHeader]
+    } else {
+	   return [ GetErrorReturnHeader "PDU is invalid" ]
+    }
+
+}
