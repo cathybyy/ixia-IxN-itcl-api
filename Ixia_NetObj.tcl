@@ -1,6 +1,6 @@
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.6
+# Release Version 1.7
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -728,5 +728,4 @@ Deputs "Args:$args "
     return [GetStandardReturnHeader]
 
 }
-
 

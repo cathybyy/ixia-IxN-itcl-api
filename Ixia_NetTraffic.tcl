@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.52
+# Release Version 1.54
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -129,6 +129,8 @@
 #	65. add VxlanHdr
 # Version 1.53.1.15
 #	66. add Traffic::traffic_enable/traffic_disable
+# Version 1.54.4.8
+#	67. add Traffic::config -tx_mode custom|auto
 
 # -- Class definition...
 class Traffic {

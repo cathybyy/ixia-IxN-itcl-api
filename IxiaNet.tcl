@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.64
+set releaseVersion 4.65
 #===============================================================================
 # Change made
 # ==2011==
@@ -257,7 +257,9 @@ set releaseVersion 4.64
 #       119. change server serverPort to remote_server remote_serverPort 
 # 2015
 # Version 4.64
-#       120. Release on Jun 8th
+#       120. Release on Jan 8th
+# Version 4.65
+#		121. Add support for NGPF
 
 proc GetEnvTcl { product } {
    
