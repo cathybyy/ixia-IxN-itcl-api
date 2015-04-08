@@ -594,7 +594,7 @@ Deputs "default ip:$default_ip"
     global errorInfo
     global errNumber
     
-    set EMode       [ list continuous burst iteration ]
+    set EMode       [ list continuous burst iteration auto custom ]
     set ELenType    [ list fixed incr random ]
     set EFillType   [ list constant incr decr prbs random ]
     set EPayloadType [ list CYCBYTE INCRBYTE DECRBYTE PRBS USERDEFINE ]
@@ -616,6 +616,10 @@ Deputs "default ip:$default_ip"
 	set no_mesh 0
 	set to_raw 0
 	set pdu_index 1
+    set burst_gap_units "bytes"
+    #set burst_gap_units "nanoseconds"
+    set enable_burst_gap "true"
+    set burst_packet_count 1
 	
     set tag "body Traffic::config [info script]"
 Deputs "----- TAG: $tag -----"
@@ -761,10 +765,23 @@ Deputs "pdu:$pdu"
 			error "$errNumber(1) key:$key value:$value"
 		    }
 		  }
+          -min_gap_bytes -
 		  -inter_burst_gap -
 		  -inter_frame_gap {
 			  set inter_frame_gap $value
 		  }
+          -enable_burst_gap {
+			  set enable_burst_gap $value
+		  }
+		  -burst_gap {
+			  set burst_gap $value
+		  }
+          -burst_gap_units  {
+			  set burst_gap_units $value
+		  }
+          -burst_packet_count {
+              set burst_packet_count $value
+          }
 		  -peer_intf {}
 		  -repeat_count {}
 			-bidirection {
@@ -1761,6 +1778,15 @@ Deputs Step240
 			}
 					
 		}
+    }
+    
+    if {[info exists burst_gap ]} {
+        ixNet setA $configElement/transmissionControl  \
+          -frameCount $burst_packet_count \
+			-interBurstGap $burst_gap \
+			-interBurstGapUnits $burst_gap_units \
+			-enableInterBurstGap $enable_burst_gap
+        
     }
     
     if { [ info exists stream_load ] } {
