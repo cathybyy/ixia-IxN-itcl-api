@@ -122,6 +122,8 @@ body Rfc2544::config { args } {
 	set frame_len_step 64
 	set frame_len_max  1518
 	set binary_mode perPort
+    set EPayloadType [ list CYCBYTE INCRBYTE DECRBYTE PRBS USERDEFINE ]
+    set payload_type PRBS
 
     foreach { key value } $args {
         set key [string tolower $key]
@@ -199,6 +201,14 @@ Deputs "frame len under test:$frame_len"
         	-dst_endpoint {
         		set dst_endpoint $value
         	}
+            -payload_type {
+				set value [ string toupper $value ]
+                if { [ lsearch -exact $EPayloadType $value ] >= 0 } {                   
+                    set payload_type $value
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+		    }
         	-bidirection {
         		set bidirection $value
         	}
@@ -341,7 +351,8 @@ Deputs "traffic type:$trafficType"
 			-src $src_endpoint -dst $dst_endpoint \
 			-traffic_type $trafficType \
 			-bidirection $bidirection \
-			-full_mesh $full_mesh
+			-full_mesh $full_mesh \
+            -payload_type $payload_type
 		set ts [ ixNet add $handle trafficSelection ]
 		ixNet setM $ts \
 			-id [ $stream cget -handle ] \
