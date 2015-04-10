@@ -287,7 +287,7 @@ proc loadconfig { filename } {
     global trafficnamelist
     global tportlist
     puts "Loadconfig $filename"
-    ixNet exec loadConfig [ixNet readForm $filename]
+    ixNet exec loadConfig [ixNet readFrom $filename]
     set root [ixNet getRoot]
     set portlist [ixNet getL $root vport]
     foreach portobj $portlist {
@@ -628,12 +628,12 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 } 
-puts "load package IxOperate..."
+puts "load package Ixia_NetDeviceGroup...."
 if { [ catch {
-	source [file join $currDir IxOperate.tcl]
+	source [file join $currDir Ixia_NetDeviceGroup.tcl]
 } err ] } {
 	if { [ catch {
-			source [file join $currDir IxOperate.tbc]
+			source [file join $currDir Ixia_NetDeviceGroup.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
@@ -679,13 +679,21 @@ proc ixNet { args } {
 	eval IxNet $args
 }
 
-if { [file exist "c:/windows/temp/ixlogfile"] } {
-} else {
-    file mkdir "c:/windows/temp/ixlogfile"
-}
 set timeVal  [ clock format [ clock seconds ] -format %Y%m%d_%H_%M ]
 set clickVal [ clock clicks ]
-set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+if { [file exist "c:/windows/temp/ixlogfile"] } {
+	set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+} elseif { [file exist "c:/temp/ixlogfile"] } {
+	set logfile_name "c:/temp/ixlogfile/$timeVal.txt"
+} else {
+	if { [ catch {
+		file mkdir "c:/windows/temp/ixlogfile"
+		set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+	} ] } {
+		file mkdir "c:/temp/ixlogfile"
+		set logfile_name "c:/temp/ixlogfile/$timeVal.txt"
+	}
+}
 
 IxDebugOn
 IxDebugCmdOn

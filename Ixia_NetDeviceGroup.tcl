@@ -22,35 +22,31 @@ class DeviceGroup {
 	public variable bgpIpv6Peer
 	public variable bgpIpv4NetworkGroup
 	public variable bgpIpv6NetworkGroup
+	public variable ipv4PrefixPools
+	public variable ipv6PrefixPools
+	public variable bgpIPRouteProperty
+	public variable bgpV6IPRouteProperty
 	
 	# -- port can be a list, but one port recommended
-	constructor { port } {
+	# -- template
+	# -- 	-enum: BGP4_DUAL L3VPN_PE	
+	constructor { port template } {
 		set portObj $port
+		set type [ string toupper $template ]
 		reborn
 	}
 	
-	method reborn {} {
-		set root [ixNet getRoot]
-		set topology [ixNet add $root topology]
-		set vPortList [ list ]
-		foreach vport $portObj {
-			set vport [ $vport cget -handle ]
-			lappend vPortList $vport
-		}
-		ixNet setM $topology \
-			-vports $vPortList
-		ixNet commit
-		
-		set hPort $vPortList
-		
-		set handle [ixNet add $topology deviceGroup]
-		ixNet setA $handle -name $this
-		ixNet commit		
-	}
+	method reborn {} {}
 	
 	method config { args } 
 	method SetMultipleValue { obj key value } {
-		set mv [ ixNet getA $obj -key ]
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::SetMultipleValue [info script]"
+Deputs "----- TAG: $tag -----"
+Deputs "obj:$obj key:$key val:$value"
+		set mv [ ixNet getA $obj $key ]
+Deputs "mv:$mv"
 		ixNet setA $mv/counter -start $value
 		if { [ catch {
 			ixNet commit
@@ -66,11 +62,90 @@ class DeviceGroup {
 	method config_bgp { args } {}
 	method config_bgp4 { args } {}
 	method config_bgp4plus { args } {}
+	method import_bgp_route { obj filename } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::import_bgp_route [info script]"
+Deputs "----- TAG: $tag -----"
+Deputs "filename:$filename"
+		ixNet setM $obj/importBgpRoutesParams \
+			-fileType csv \
+			-dataFile [ixNet readFrom $filename]
+		ixNet commit
+		ixNet exec importBgpRoutes $obj/importBgpRoutesParams
+	}
+	method import_bgp4_route { filename } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::import_bgp4_route [info script]"
+Deputs "----- TAG: $tag -----"
+		import_bgp_route $bgpIPRouteProperty $filename
+	}
+	method import_bgp4plus_route { filename } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::import_bgp4plus_route [info script]"
+Deputs "----- TAG: $tag -----"
+		import_bgp_route $bgpV6IPRouteProperty $filename
+	}
+}
+
+body DeviceGroup::reborn {} {
+	global errorInfo
+	global errNumber
+	set tag "body DeviceGroup::reborn [info script]"
+Deputs "----- TAG: $tag -----"
+	set root [ixNet getRoot]
+	set topology [ixNet add $root topology]
+	set vPortList [ list ]
+	foreach vport $portObj {
+		set vport [ $vport cget -handle ]
+		lappend vPortList $vport
+	}
+	ixNet setM $topology \
+		-vports $vPortList
+	ixNet commit
+	
+	set hPort $vPortList
+	
+	set handle [ixNet add $topology deviceGroup]
+	ixNet setA $handle -name $this
+	ixNet commit	
+
+	switch $type {
+		BGP4_DUAL {
+			set ethernet [ixNet add $handle ethernet]
+			ixNet commit
+			set ipv4 	 [ixNet add $ethernet ipv4]
+			ixNet commit
+			set ipv6	 [ixNet add $ethernet ipv6]
+			ixNet commit
+			set bgpIpv4Peer [ixNet add $ipv4 bgpIpv4Peer]
+			ixNet commit
+			set bgpIpv6Peer [ixNet add $ipv6 bgpIpv6Peer]
+			ixNet commit
+			set bgpIpv4NetworkGroup [ixNet add $handle networkGroup]
+			set bgpIpv6NetworkGroup [ixNet add $handle networkGroup]
+			ixNet commit
+			set ipv4PrefixPools [ ixNet add $bgpIpv4NetworkGroup ipv4PrefixPools ]
+			set ipv6PrefixPools [ ixNet add $bgpIpv6NetworkGroup ipv6PrefixPools ]
+			ixNet commit
+			set bgpIPRouteProperty 		[ ixNet getL $ipv4PrefixPools bgpIPRouteProperty ]
+			set bgpV6IPRouteProperty 	[ ixNet getL $ipv6PrefixPools bgpV6IPRouteProperty ]
+			SetMultipleValue [ ixNet getL $ipv4PrefixPools bgpV6IPRouteProperty ] -active false
+			SetMultipleValue [ ixNet getL $ipv6PrefixPools bgpIPRouteProperty ] -active false
+			
+		}
+		L3VPN_PE {
+		}
+	}
+	
+	ixNet setA $topology -name $type
+	ixNet commit
+
 }
 
 # ---------------------------------
-# -- type
-# -- 	-enum: BGP4_DUAL L3VPN_PE
 # -- count
 # --	-INT
 # -- router_id
@@ -91,9 +166,6 @@ Deputs "Args:$args "
     foreach { key value } $args {
 		set key [string tolower $key]
 		switch -exact -- $key {
-			-type {
-				set type [ string tolower $value ]
-			}
 			-count {
 				set count $value
 			}
@@ -102,10 +174,7 @@ Deputs "Args:$args "
 			}
 		}
     }
-	
-	ixNet setA $topology -name $type
-	ixNet commit
-	
+		
 	ixNet setM $handle \
 		-multiplier $count \
 		-name $this 
@@ -114,27 +183,7 @@ Deputs "Args:$args "
 	if { [ info exists router_id ] } {
 		SetMultipleValue [ ixNet getL $handle routerData ] -routerId $router_id
 	}
-	
-	switch $type {
-		BGP4_DUAL {
-			set ethernet [ixNet add $handle ethernet]
-			ixNet commit
-			set ipv4 	 [ixNet add $ethernet ipv4]
-			ixNet commit
-			set ipv6	 [ixNet add $ethernet ipv6]
-			ixNet commit
-			set bgpIpv4Peer [ixNet add $ipv4 bgpIpv4Peer]
-			ixNet commit
-			set bgpIpv6Peer [ixNet add $ipv6 bgpIpv6Peer]
-			ixNet commit
-			set bgpIpv4NetworkGroup [ixNet add $handle networkGroup]
-			set bgpIpv6NetworkGroup [ixNet add $handle networkGroup]
-			ixNet commit
-		}
-		L3VPN_PE {
-		}
-	}
-	
+		
     return [GetStandardReturnHeader]
 
 }
@@ -155,7 +204,7 @@ body DeviceGroup::config_ip { args } {
 Deputs "----- TAG: $tag -----"
 
 	if { $handle == "" } {
-		config -type $type -count $count
+		config -count $count
 	}
 	
 #param collection
@@ -197,7 +246,7 @@ body DeviceGroup::config_ipv4 { args } {
     set tag "body DeviceGroup::config_ipv4 [info script]"
 Deputs "----- TAG: $tag -----"
 
-	return [config_ip -family ipv4]
+	return [eval config_ip -family $ipv4 $args]
 }
 body DeviceGroup::config_ipv6 { args } {
     global errorInfo
@@ -205,7 +254,7 @@ body DeviceGroup::config_ipv6 { args } {
     set tag "body DeviceGroup::config_ipv6 [info script]"
 Deputs "----- TAG: $tag -----"
 
-	return [config_ip -family ipv6]
+	return [eval config_ip -family $ipv6 $args]
 }
 
 # ---------------------------------
@@ -230,7 +279,7 @@ body DeviceGroup::config_bgp { args } {
 Deputs "----- TAG: $tag -----"
 
 	if { $handle == "" } {
-		config -type $type -count $count
+		config -count $count
 	}
 	
 #param collection
@@ -279,14 +328,13 @@ Deputs "Args:$args "
 	return [GetStandardReturnHeader]
 
 }
-
 body DeviceGroup::config_bgp4 { args } {
     global errorInfo
     global errNumber
     set tag "body DeviceGroup::config_bgp4 [info script]"
 Deputs "----- TAG: $tag -----"
 
-	return [config_ip -family bgpIpv4Peer]
+	return [eval config_bgp -family $bgpIpv4Peer $args]
 }
 body DeviceGroup::config_bgp4plus { args } {
     global errorInfo
@@ -294,7 +342,7 @@ body DeviceGroup::config_bgp4plus { args } {
     set tag "body DeviceGroup::config_bgp4plus [info script]"
 Deputs "----- TAG: $tag -----"
 
-	return [config_ip -family bgpIpv6Peer]
+	return [eval config_bgp -family $bgpIpv6Peer $args]
 }
 
 
