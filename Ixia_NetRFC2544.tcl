@@ -123,7 +123,9 @@ body Rfc2544::config { args } {
 	set frame_len_max  1518
 	set binary_mode perPort
     set EPayloadType [ list CYCBYTE INCRBYTE DECRBYTE PRBS USERDEFINE ]
-    set payload_type PRBS
+    set EFillType   [ list constant incr decr prbs random ]
+    #set payload_type PRBS
+    set fill_type prbs
 
     foreach { key value } $args {
         set key [string tolower $key]
@@ -201,6 +203,15 @@ Deputs "frame len under test:$frame_len"
         	-dst_endpoint {
         		set dst_endpoint $value
         	}
+            -fill_type {
+                set value [ string tolower $value ]
+                if { [ lsearch -exact $EFillType $value ] >= 0 } {
+                    
+                    set fill_type $value
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
             -payload_type {
 				set value [ string toupper $value ]
                 if { [ lsearch -exact $EPayloadType $value ] >= 0 } {                   
@@ -347,12 +358,23 @@ Deputs "create one 2 one traffic"
 		}
 
 Deputs "traffic type:$trafficType"		
-	    $this.traffic config \
+	    
+        if { [ info exists payload_type ] } {
+           $this.traffic config \
 			-src $src_endpoint -dst $dst_endpoint \
 			-traffic_type $trafficType \
 			-bidirection $bidirection \
 			-full_mesh $full_mesh \
             -payload_type $payload_type
+        
+        } else {
+            $this.traffic config \
+			-src $src_endpoint -dst $dst_endpoint \
+			-traffic_type $trafficType \
+			-bidirection $bidirection \
+			-full_mesh $full_mesh \
+            -fill_type $fill_type
+        }
 		set ts [ ixNet add $handle trafficSelection ]
 		ixNet setM $ts \
 			-id [ $stream cget -handle ] \
