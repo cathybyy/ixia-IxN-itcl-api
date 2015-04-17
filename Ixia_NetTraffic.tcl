@@ -519,13 +519,11 @@ Deputs "----- TAG: $tag -----"
 
 		set root    [ixNet getRoot]
 		set handle  [ixNet add $root/traffic trafficItem]
-
-		regexp {\d+} $handle id
-		ixNet setM $handle \
-			-name $this
-Deputs "traffic item handle:$handle"
-
 	}
+	regexp {\d+} $handle id
+	ixNet setM $handle \
+		-name $this
+Deputs "traffic item handle:$handle"
 	
 	set portObj $port
 Deputs "portObj:$portObj"
@@ -3472,15 +3470,15 @@ Deputs Step10
 			 }
 			}
 			-src {
-			Deputs "set ip address...$value"
-				foreach addr $value {
-					if { [ IsIPv4Address $addr ] } {
-						set sa $value
-						set noIp	0
-					Deputs "sa:$sa"
-					} else {
-						error "$errNumber(1) key:$key value:$value"
+				if { [ llength $value ] > 1000 } {
+					set sa $value
+				} else {
+					foreach addr $value {
+						 if { ![ IsIPv4Address $addr ] } {
+							error "$errNumber(1) key:$key value:$addr"
+						}
 					}
+					set sa $value
 				}
 			}
 			-src_num {
@@ -3512,13 +3510,16 @@ Deputs Step10
 			 }                    
 			}
 			-dst {
-			foreach addr $value {
-				 if { [ IsIPv4Address $addr ] } {
+				if { [ llength $value ] > 1000 } {
 					set da $value
-				 } else {
-					error "$errNumber(1) key:$key value:$value"
-				 }
-			 }
+				} else {
+					foreach addr $value {
+						 if { ![ IsIPv4Address $addr ] } {
+							error "$errNumber(1) key:$key value:$addr"
+						}
+					}
+					set da $value
+				}
 			}
 			-dst_num {
 			 set trans [ UnitTrans $value ]
@@ -4028,7 +4029,8 @@ Deputs "saStep:$saStep"
     if { [ info exists destinationAddress ] } {
 	   if { [ info exists damode ] } {
 		  switch -exact $damode {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $damode
 				AddField dstIP
 				AddFieldConfig $destinationAddress

@@ -1,6 +1,6 @@
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.7
+# Release Version 1.2
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -62,6 +62,25 @@ Deputs "mv:$mv"
 	method config_bgp { args } {}
 	method config_bgp4 { args } {}
 	method config_bgp4plus { args } {}
+	method config_bgp_route { args } {}
+	method config_bgp4_route { args } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::config_bgp4_route [info script]"
+Deputs "----- TAG: $tag -----"
+		eval config_bgp_route $args -obj $bgpIPRouteProperty
+		return [GetStandardReturnHeader]
+
+	}
+	method config_bgp4plus_route { args } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::config_bgp4plus_route [info script]"
+Deputs "----- TAG: $tag -----"
+		eval config_bgp_route $args -obj $bgpV6IPRouteProperty
+		return [GetStandardReturnHeader]
+
+	}
 	method import_bgp_route { obj filename } {
 		global errorInfo
 		global errNumber
@@ -87,6 +106,35 @@ Deputs "----- TAG: $tag -----"
 		set tag "body DeviceGroup::import_bgp4plus_route [info script]"
 Deputs "----- TAG: $tag -----"
 		import_bgp_route $bgpV6IPRouteProperty $filename
+	}
+	proc enable_prefix { obj } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::enable_prefix [info script]"
+Deputs "----- TAG: $tag -----"
+		SetMultipleValue [ixNet getP $obj] -enabled true
+	}
+	proc disable_prefix { obj } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::disable_prefix [info script]"
+Deputs "----- TAG: $tag -----"
+		SetMultipleValue [ixNet getP $obj] -enabled false
+	}
+	proc start_prefix { obj } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::advertise_prefix [info script]"
+Deputs "----- TAG: $tag -----"
+		enable_prefix $obj
+		ixNet exec start $obj
+	}
+	proc stop_prefix { obj } {
+		global errorInfo
+		global errNumber
+		set tag "body DeviceGroup::stop_prefix [info script]"
+Deputs "----- TAG: $tag -----"
+		ixNet exec start $obj
 	}
 }
 
@@ -140,8 +188,10 @@ Deputs "----- TAG: $tag -----"
 		}
 	}
 	
-	ixNet setA $topology -name $type
+	ixNet setA $topology -name ${type}_$this
 	ixNet commit
+    
+	return [GetStandardReturnHeader]
 
 }
 
@@ -345,6 +395,100 @@ Deputs "----- TAG: $tag -----"
 	return [eval config_bgp -family $bgpIpv6Peer $args]
 }
 
+# ---------------------------------
+# -- start
+# --	-IP
+# -- step
+# --	-IP
+# -- prefix_len
+# --	-INT
+# -- prefix_step
+# --	-INT
+# -- obj
+body DeviceGroup::config_bgp_route { args } {
+    global errorInfo
+    global errNumber
+    set tag "body DeviceGroup::config_bgp [info script]"
+Deputs "----- TAG: $tag -----"
+	if { $handle == "" } {
+		config -count $count
+	}
+	
+	set num 1
+#param collection
+Deputs "Args:$args "
+    foreach { key value } $args {
+		set key [string tolower $key]
+		switch -exact -- $key {
+			-start {
+				set address_start $value
+			}
+			-step {
+				set address_step $value
+			}
+			-prefix_len {
+				set prefix_length_start $value
+			}
+			-prefix_step {
+				set prefix_length_step $value
+			}
+			-num {
+				set num $value
+			}
+			-obj {
+				set obj $value
+			}
+			-family {
+				set family $value
+			}
+		}
+    }
+		
+	if { [ info exists obj ] == 0 } {
+		set networkGroup [ixNet add $handle networkGroup]
+		ixNet commit
+		if { $family == "ipv6" } {
+			set obj [ ixNet add $networkGroup ipv6PrefixPools ]
+		} else {
+			set obj [ ixNet add $networkGroup ipv4PrefixPools ]
+		}
+		ixNet commit
+	}
+	
+	ixNet setA $networkGroup -multiplier $num
+
+	set mvAddr [ ixNet getA $obj -networkAddress ]
+	set mvPfx  [ ixNet getA $obj -prefixLength ]
+	if { [ info exists address_start ] } {
+		ixNet setA $mvAddr/counter -start $address_start
+	}
+	if { [ info exists address_step ] } {
+		ixNet setA $mvAddr/counter -step $address_step
+	}
+	if { [ info exists prefix_length_start ] } {
+		ixNet setA $mvPfx/counter -start $prefix_length_start
+	}
+	if { [ info exists prefix_length_step ] } {
+		ixNet setA $mvPfx/counter -step $prefix_length_step
+	}
+	ixNet commit
+	
+	if { [ info exists family ] } {
+		if { $family == "ipv4" } {
+			catch {
+				SetMultipleValue [ ixNet getL $obj bgpV6IPRouteProperty ] -active false				
+			}
+		}
+		if { $family == "ipv6" } {
+			catch {
+				SetMultipleValue [ ixNet getL $obj bgpIPRouteProperty ] -active false
+			}
+		}
+	}
+	
+	return $obj
+
+}
 
 
 
