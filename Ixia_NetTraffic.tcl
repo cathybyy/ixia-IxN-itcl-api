@@ -1894,7 +1894,9 @@ Deputs "epId:$epId"
 	Deputs "srcMac: [ixNet getA $src -startValue]"
 	Deputs "dstMac: [ixNet getA $dst -startValue]"
 			set regenerate 0
-			if { [ixNet getA $dst -singleValue] == "00:00:00:00:00:00" && [ixNet getA $dst -startValue] == "00:00:00:00:00:00" } {
+			if { [ixNet getA $dst -singleValue] == "00:00:00:00:00:00" &&
+			[ixNet getA $dst -startValue] == "00:00:00:00:00:00" &&
+			[ llength [ixNet getA $dst -valueList] ] == 0 } {
 Deputs "Step260"		
 				if { [ llength $dstMac ] > 0 } {
 					ixNet setM $dst -valueType valueList -valueList $dstMac
@@ -1904,7 +1906,9 @@ Deputs "Step260"
 				
 				set regenerate 1
 			}
-			if { [ixNet getA $src -singleValue] == "00:00:00:00:00:00" && [ixNet getA $src -startValue] == "00:00:00:00:00:00" } {
+			if { [ixNet getA $src -singleValue] == "00:00:00:00:00:00" &&
+			[ixNet getA $src -startValue] == "00:00:00:00:00:00" &&
+			[ llength [ ixNet getA $src -valueList ] ] == 0 } {
 Deputs "Step270"		
 				if { [ llength $srcMac ] > 0 } {
 					ixNet setM $src -valueType valueList -valueList $srcMac
@@ -2683,12 +2687,16 @@ Deputs "----- TAG: $tag -----"
 	   set key [string tolower $key]
 	   switch -exact -- $key {
 		  -dst {
-			 set value [ MacTrans $value ]
-			 if { [ IsMacAddress $value ] } {
+			if { [ llength $value ] > 1 } {
 				set da $value
-			 } else {
-Deputs "wrong mac addr: $value"
-				error "$errNumber(1) key:$key value:$value"
+			} else {
+				 set value [ MacTrans $value ]
+				 if { [ IsMacAddress $value ] } {
+					set da $value
+				 } else {
+	Deputs "wrong mac addr: $value"
+					error "$errNumber(1) key:$key value:$value"
+				 }
 			 }
 		  }
 		  -dst_num {
@@ -2718,12 +2726,17 @@ Deputs "daStep:$daStep"
 			 }
 		  }
 		  -src {
-			 set value [ MacTrans $value ]
-			 if { [ IsMacAddress $value ] } {
+			if { [ llength $value ] > 1 } {
 				set sa $value
-					set noMac 0
-			 } else {
-				error "$errNumber(1) key:$key value:$value"
+						set noMac 0
+			} else {
+				 set value [ MacTrans $value ]
+				 if { [ IsMacAddress $value ] } {
+					set sa $value
+						set noMac 0
+				 } else {
+					error "$errNumber(1) key:$key value:$value"
+				 }
 			 }
 		  }
 		  -src_num {
@@ -2780,6 +2793,9 @@ Deputs Step3
 					random {
 						set saReCnt Random
 					}
+					list {
+						set saReCnt List
+					}
 				}
 			}
 			-dst_range_mode {
@@ -2793,6 +2809,9 @@ Deputs Step3
 					}
 					random {
 						set daReCnt Random
+					}
+					list {
+						set daReCnt List
 					}
 				}
 			}
@@ -2812,7 +2831,8 @@ Deputs Step50
 	   if { [ info exists daReCnt ] } {
 Deputs Step60
 		  switch -exact $daReCnt {
-			 Fixed {
+			 Fixed -
+			 List {
 Deputs Step70
 				AddFieldMode $daReCnt
 				AddField destinationAddress
@@ -2843,7 +2863,8 @@ Deputs Step100
 	   if { [ info exists saReCnt ] } {
 Deputs Step110
 		  switch -exact $saReCnt {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $saReCnt
 				AddField sourceAddress
 				AddFieldConfig $sa
@@ -3940,6 +3961,9 @@ Deputs "Dst addr num: $trans"
 					random {
 						set samode Random
 					}
+					list {
+						set samode List						
+					}
 				}
 			}
 			-dst_range_mode {
@@ -3952,6 +3976,9 @@ Deputs "Dst addr num: $trans"
 						set damode Decrementing
 					}
 					random {
+						set damode Random
+					}
+					list {
 						set damode Random
 					}
 				}
@@ -4001,7 +4028,8 @@ Deputs "Pro: $pro"
     if { [ info exists sourceAddress ] } {
 	   if { [ info exists samode ] } {
 		  switch -exact $samode {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $samode
 				AddField srcIP
 				AddFieldConfig $sourceAddress

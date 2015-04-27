@@ -39,7 +39,7 @@ class DeviceGroup {
 	method reborn {} {}
 	
 	method config { args } 
-	method SetMultipleValue { obj key value } {
+	proc SetMultipleValue { obj key value } {
 		global errorInfo
 		global errNumber
 		set tag "body DeviceGroup::SetMultipleValue [info script]"
@@ -107,6 +107,12 @@ Deputs "----- TAG: $tag -----"
 Deputs "----- TAG: $tag -----"
 		import_bgp_route $bgpV6IPRouteProperty $filename
 	}
+	method start_bgp4_route {} {
+		ixNet exec start $bgpIpv4NetworkGroup
+	}
+	method start_bgp4plus_route {} {
+		ixNet exec start $bgpIpv6NetworkGroup
+	}
 	proc enable_prefix { obj } {
 		global errorInfo
 		global errNumber
@@ -126,15 +132,14 @@ Deputs "----- TAG: $tag -----"
 		global errNumber
 		set tag "body DeviceGroup::advertise_prefix [info script]"
 Deputs "----- TAG: $tag -----"
-		enable_prefix $obj
-		ixNet exec start $obj
+		ixNet exec start [ixNet getP $obj]
 	}
 	proc stop_prefix { obj } {
 		global errorInfo
 		global errNumber
 		set tag "body DeviceGroup::stop_prefix [info script]"
 Deputs "----- TAG: $tag -----"
-		ixNet exec start $obj
+		ixNet exec stop [ixNet getP $obj]
 	}
 }
 
