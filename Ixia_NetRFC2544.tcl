@@ -580,7 +580,8 @@ Deputs "Step120"
 		-binarySearchType $binary_mode \
 		-forceRegenerate $regenerate \
 		-rfc2889ordering val2889Ordering \
-		-enableMinFrameSize True
+		-enableMinFrameSize True \
+		-reportSequenceError True
 	ixNet setA $handle/learnFrames \
 		-learnSendMacOnly True
 
