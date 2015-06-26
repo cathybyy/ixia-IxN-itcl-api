@@ -1,12 +1,25 @@
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.2
+# Release Version 1.5
 #===============================================================================
 # Change made
 # Version 1.0 
 #       1. Create
 # Version 1.1.4.8
 #		2. add Scenario DeviceGroup class for NGPF
+# Version 1.2.5.14
+#		3. add enum IPV4 & IPV6 
+#		4. add config_ethernet
+#		5. add config_vlan
+# Version 1.3.4.66
+#		6. add config_ip
+#		7. add config_bgp
+#		8. add config_bgp_route
+#		9. add set_route
+# Version 1.4.6.9
+#		10. add -type in config
+# Version 1.5.6.10
+#		11. add alias in config_ethernet config_ip
 
 class DeviceGroup {
 	
@@ -30,32 +43,111 @@ class DeviceGroup {
 	# -- port can be a list, but one port recommended
 	# -- template
 	# -- 	-enum: BGP4_DUAL L3VPN_PE	
-	constructor { port template } {
+	constructor { port { template null } } {
 		set portObj $port
 		set type [ string toupper $template ]
 		reborn
 	}
 	
 	method reborn {} {}
-	
+	method init {} {
+		switch $type {
+			BGP4_DUAL {
+				set ethernet [ixNet add $handle ethernet]
+				ixNet commit
+				set vlan [lindex [ixNet getL $ethernet vlan] 0]
+				set ipv4 	 [ixNet add $ethernet ipv4]
+				ixNet commit
+				set ipv6	 [ixNet add $ethernet ipv6]
+				ixNet commit
+				set bgpIpv4Peer [ixNet add $ipv4 bgpIpv4Peer]
+				ixNet commit
+				set bgpIpv6Peer [ixNet add $ipv6 bgpIpv6Peer]
+				ixNet commit
+				set bgpIpv4NetworkGroup [ixNet add $handle networkGroup]
+				set bgpIpv6NetworkGroup [ixNet add $handle networkGroup]
+				ixNet commit
+				set ipv4PrefixPools [ ixNet add $bgpIpv4NetworkGroup ipv4PrefixPools ]
+				set ipv6PrefixPools [ ixNet add $bgpIpv6NetworkGroup ipv6PrefixPools ]
+				ixNet commit
+				set bgpIPRouteProperty 		[ ixNet getL $ipv4PrefixPools bgpIPRouteProperty ]
+				set bgpV6IPRouteProperty 	[ ixNet getL $ipv6PrefixPools bgpV6IPRouteProperty ]
+				SetMultipleValue [ ixNet getL $ipv4PrefixPools bgpV6IPRouteProperty ] -active false
+				SetMultipleValue [ ixNet getL $ipv6PrefixPools bgpIPRouteProperty ] -active false
+				
+			}
+			BGP4 {
+				set ethernet [ixNet add $handle ethernet]
+				ixNet commit
+				set vlan [lindex [ixNet getL $ethernet vlan] 0]
+				set ipv4 	 [ixNet add $ethernet ipv4]
+				ixNet commit
+				set bgpIpv4Peer [ixNet add $ipv4 bgpIpv4Peer]
+				ixNet commit
+			
+			}
+			IPV4 {
+				set ethernet [ixNet add $handle ethernet]
+				ixNet commit
+				set vlan [lindex [ixNet getL $ethernet vlan] 0]
+				set ipv4 	 [ixNet add $ethernet ipv4]
+				ixNet commit		
+			}
+			IPV6 {
+				set ethernet [ixNet add $handle ethernet]
+				ixNet commit
+				set vlan [lindex [ixNet getL $ethernet vlan] 0]
+				set ipv6	 [ixNet add $ethernet ipv6]
+				ixNet commit
+			}
+			L3VPN_PE {
+			}
+		}
+		ixNet setA $topology -name ${type}_$this
+		ixNet commit
+	}
 	method config { args } 
-	proc SetMultipleValue { obj key value } {
+	proc SetMultipleValue { obj key value { step 0 } } {
 		global errorInfo
 		global errNumber
 		set tag "body DeviceGroup::SetMultipleValue [info script]"
 Deputs "----- TAG: $tag -----"
-Deputs "obj:$obj key:$key val:$value"
+Deputs "obj:$obj key:$key val:$value step:$step"
 		set mv [ ixNet getA $obj $key ]
 Deputs "mv:$mv"
-		ixNet setA $mv/counter -start $value
+		if { $step != 0 } {
+Deputs Step5
+			ixNet setA $mv -pattern counter
+			ixNet commit
+		}
+Deputs Step10		
 		if { [ catch {
+			set isMvObj [ixNet exists $mv]
+	 	} ] } {
+			return
+		} else {
+			if { $isMvObj == "false" } {
+				return
+			}
+		}
+		
+		ixNet setM $mv/counter \
+			-start $value \
+			-step $step
+		if { [ catch {
+Deputs Step20		
 			ixNet commit
 		} ] } {
+Deputs Step30		
 			ixNet setA $mv/singleValue -value $value
-			ixNet commit
+			catch {
+Deputs Step40			
+				ixNet commit
+			}
 		}
 	}
 	method config_ethernet { args } {}
+	method config_vlan { args } {}
 	method config_ip { args } {}
 	method config_ipv4 { args } {}
 	method config_ipv6 { args } {}
@@ -68,7 +160,12 @@ Deputs "mv:$mv"
 		global errNumber
 		set tag "body DeviceGroup::config_bgp4_route [info script]"
 Deputs "----- TAG: $tag -----"
-		eval config_bgp_route $args -obj $bgpIPRouteProperty
+		if { [ info exists bgpIPRouteProperty ] } {
+		
+			eval config_bgp_route $args -obj $bgpIPRouteProperty
+		} else {
+			eval config_bgp_route $args -family ipv4
+		}
 		return [GetStandardReturnHeader]
 
 	}
@@ -113,6 +210,7 @@ Deputs "----- TAG: $tag -----"
 	method start_bgp4plus_route {} {
 		ixNet exec start $bgpIpv6NetworkGroup
 	}
+	method set_route { args } {}
 	proc enable_prefix { obj } {
 		global errorInfo
 		global errNumber
@@ -141,6 +239,7 @@ Deputs "----- TAG: $tag -----"
 Deputs "----- TAG: $tag -----"
 		ixNet exec stop [ixNet getP $obj]
 	}
+
 }
 
 body DeviceGroup::reborn {} {
@@ -165,36 +264,9 @@ Deputs "----- TAG: $tag -----"
 	ixNet setA $handle -name $this
 	ixNet commit	
 
-	switch $type {
-		BGP4_DUAL {
-			set ethernet [ixNet add $handle ethernet]
-			ixNet commit
-			set ipv4 	 [ixNet add $ethernet ipv4]
-			ixNet commit
-			set ipv6	 [ixNet add $ethernet ipv6]
-			ixNet commit
-			set bgpIpv4Peer [ixNet add $ipv4 bgpIpv4Peer]
-			ixNet commit
-			set bgpIpv6Peer [ixNet add $ipv6 bgpIpv6Peer]
-			ixNet commit
-			set bgpIpv4NetworkGroup [ixNet add $handle networkGroup]
-			set bgpIpv6NetworkGroup [ixNet add $handle networkGroup]
-			ixNet commit
-			set ipv4PrefixPools [ ixNet add $bgpIpv4NetworkGroup ipv4PrefixPools ]
-			set ipv6PrefixPools [ ixNet add $bgpIpv6NetworkGroup ipv6PrefixPools ]
-			ixNet commit
-			set bgpIPRouteProperty 		[ ixNet getL $ipv4PrefixPools bgpIPRouteProperty ]
-			set bgpV6IPRouteProperty 	[ ixNet getL $ipv6PrefixPools bgpV6IPRouteProperty ]
-			SetMultipleValue [ ixNet getL $ipv4PrefixPools bgpV6IPRouteProperty ] -active false
-			SetMultipleValue [ ixNet getL $ipv6PrefixPools bgpIPRouteProperty ] -active false
-			
-		}
-		L3VPN_PE {
-		}
+	if { $type != "NULL" } {
+		init
 	}
-	
-	ixNet setA $topology -name ${type}_$this
-	ixNet commit
     
 	return [GetStandardReturnHeader]
 
@@ -227,6 +299,10 @@ Deputs "Args:$args "
 			-router_id {
 				set router_id $value
 			}
+			-type {
+				set type [string toupper $value]
+				init
+			}
 		}
     }
 		
@@ -241,6 +317,159 @@ Deputs "Args:$args "
 		
     return [GetStandardReturnHeader]
 
+}
+
+# ---------------------------------
+# -- mac/src_mac
+# --	-MAC addr
+# -- src_mac_step
+# --	-MAC addr
+# -- mtu
+# --	-INT
+# -- enable_vlan
+# --	-BOOL
+body DeviceGroup::config_ethernet { args } {
+    global errorInfo
+    global errNumber
+    set tag "body DeviceGroup::config_ethernet [info script]"
+Deputs "----- TAG: $tag -----"
+
+	if { $handle == "" } {
+		config -count $count
+	}
+	
+#param collection
+Deputs "Args:$args "
+
+	array set kvList [list]
+
+    foreach { key value } $args {
+		set key [string tolower $key]
+		switch -exact -- $key {
+			-mac -
+			-mtu {
+			}
+			-vlan_count {
+				ixNet setA $ethernet -vlanCount $value
+				ixNet commit
+			}
+			-enable_vlan {
+				set key -enableVlans
+			}
+			-src_mac {
+				set key -mac
+			}
+			-src_mac_step {
+				set src_mac_step $value
+			}
+			default {
+				continue
+			}
+		}
+		set kvList($key) $value
+    }
+	
+	foreach key [array names kvList] {
+		switch -exact -- $key {
+			-mac {
+				if { [ info exists src_mac_step ] } {
+					SetMultipleValue $ethernet $key $kvList($key) $src_mac_step
+				} else {
+					SetMultipleValue $ethernet $key $kvList($key)
+				}
+			}
+			default {
+				SetMultipleValue $ethernet $key $kvList($key)
+			}
+		}
+	}
+	return [GetStandardReturnHeader]
+}
+
+# ---------------------------------
+# -- tpid
+# --	-HEX
+# -- priority
+# --	-INT
+# -- vlan_id
+# --	-INT
+body DeviceGroup::config_vlan { args } {
+    global errorInfo
+    global errNumber
+    set tag "body DeviceGroup::config_vlan [info script]"
+Deputs "----- TAG: $tag -----"
+
+	if { $handle == "" } {
+		config -count $count
+	}
+	
+#param collection
+Deputs "Args:$args "
+
+	config_ethernet -enable_vlan 1
+
+	array set kvList [list]
+
+    foreach { key value } $args {
+		set key [string tolower $key]
+		switch -exact -- $key {
+			-tpid {
+				if { [ IsHex $value ] } {
+					set value [string replace $value 0 1 ethertype]
+					# set value [ format %i $value ]
+				}
+			}
+			-priority {
+			}
+			-vlan_id -
+			-vlan_id1 -
+			-outer_vlan_id {
+				set key -vlanId				
+			}
+			-vlan_id1_step -
+			-outer_vlan_step {
+				set vlan_step $value
+			}
+			-vlan_id2 -
+			-inner_vlan_id {
+				set key -vlanId2
+			}
+            -vlan_id2_step -
+			-inner_vlan_step {
+				set vlan_step2 $value
+			}			
+			default {
+				continue
+			}
+		}
+		set kvList($key) $value
+    }
+	
+	foreach key [array names kvList] {
+		switch -exact -- $key {
+			-vlanId {
+				if { [ info exists vlan_step ] } {
+					SetMultipleValue $vlan $key $kvList($key) $vlan_step
+				} else {
+					SetMultipleValue $vlan $key $kvList($key)
+				}
+			}
+			-vlanId2 {
+				config_ethernet -vlan_count 2
+				set vlan [lindex [ixNet getL $ethernet vlan] 1]
+				if { [ info exists vlan_step2 ] } {
+					SetMultipleValue $vlan -vlanId $kvList($key) $vlan_step2
+				} else {
+					SetMultipleValue $vlan -vlanId $kvList($key)
+				}
+				set vlan [lindex [ixNet getL $ethernet vlan] 0]
+			}
+			default {
+				SetMultipleValue $ethernet $key $kvList($key)
+			}
+		}
+	}
+	return [GetStandardReturnHeader]
 }
 
 # ---------------------------------
@@ -273,12 +502,32 @@ Deputs "Args:$args "
 			-address -
 			-prefix {
 			}
-			-gateway {
+			-gateway -
+			-ipv4_gw -
+			-ipv6_gw {
 				set key -gatewayIp
+			}
+			-ipv4_gw_step -
+			-ipv6_gw_step {
+				set gw_step $value
 			}
 			-family {
 				set obj $value
 				continue
+			}
+			-ipv4_addr -
+			-ipv6_addr {
+				set key -address
+			}
+			-ipv4_addr_step -
+			-ipv6_addr_step {
+				set addr_step $value
+			}
+			-ipv4_prefix_len -
+			-ipv4_prefix_length -
+			-ipv6_prefix_len -
+			-ipv6_prefix_length {
+				set key -prefix
 			}
 			default {
 				continue
@@ -289,7 +538,25 @@ Deputs "Args:$args "
 	
 	if { [ info exists obj ] } {
 		foreach key [array names kvList] {
-			SetMultipleValue $obj $key $kvList($key)
+			switch -exact -- $key {
+				-address {
+					if { [ info exists addr_step ] } {
+						SetMultipleValue $obj $key $kvList($key) $addr_step
+					} else {
+						SetMultipleValue $obj $key $kvList($key)
+					}
+				}
+				-gatewayIp {
+					if { [ info exists gw_step ] } {
+						SetMultipleValue $obj $key $kvList($key) $gw_step
+					} else {
+						SetMultipleValue $obj $key $kvList($key)
+					}
+				}
+				default {
+					SetMultipleValue $obj $key $kvList($key)
+				}
+			}
 		}
 	}
 	return [GetStandardReturnHeader]
@@ -364,6 +631,9 @@ Deputs "Args:$args "
 			-as {
 				set key -localAs2Bytes
 			}
+			-as_step {
+				set as_step $value
+			}
 			-family {
 				set obj $value
 				continue
@@ -377,7 +647,14 @@ Deputs "Args:$args "
 	
 	if { [ info exists obj ] } {
 		foreach key [array names kvList] {
-			SetMultipleValue $obj $key $kvList($key)
+			switch -- $key {
+				-localAs2Bytes {
+					SetMultipleValue $obj $key $kvList($key) $as_step
+				}
+				default {
+					SetMultipleValue $obj $key $kvList($key)
+				}
+			}
 		}
 	}
 	return [GetStandardReturnHeader]
@@ -409,6 +686,10 @@ Deputs "----- TAG: $tag -----"
 # --	-INT
 # -- prefix_step
 # --	-INT
+# -- num
+# --	-INT
+# -- family
+# --	-ipv4/ipv6
 # -- obj
 body DeviceGroup::config_bgp_route { args } {
     global errorInfo
@@ -495,6 +776,51 @@ Deputs "Args:$args "
 
 }
 
+# ---------------------------------
+# -- route_block
+# --	-RouteBlock obj
+body DeviceGroup::set_route { args } {
+
+    global errorInfo
+    global errNumber
+    set tag "body DeviceGroup::set_route [info script]"
+Deputs "----- TAG: $tag -----"
+
+#param collection
+Deputs "Args:$args "
+    foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -route_block {
+            	set route_block $value
+            }
+        }
+    }
+	
+	if { [ info exists route_block ] } {
+	
+		set num 		[ $route_block cget -num ]
+		set step 		[ $route_block cget -step ]
+		set prefix_len 	[ $route_block cget -prefix_len ]
+		set start 		[ $route_block cget -start ]
+		set type 		[ $route_block cget -type ] 
+		
+		set handle [ \
+			config_bgp_route \
+				-num $num \
+				-start $start \
+				-family $type \
+				-step [ IncrementIPAddr 0.0.0.0 $prefix_len $step ] \
+				-prefix_len $prefix_len
+		]
+		
+		$route_block configure -handle $handle
+	}
+	
+    return [GetStandardReturnHeader]
+	
+
+}
 
 
 

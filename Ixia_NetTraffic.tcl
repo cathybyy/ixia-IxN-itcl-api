@@ -2371,10 +2371,10 @@ Deputs "stats val:$statsVal"
 Deputs "ret:$ret"
 
     }
-	
-	ixNet remove $view
-	ixNet commit
-	   
+	catch {
+		ixNet remove $view
+		ixNet commit
+	}
     return $ret
     
 }

@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.65
+set releaseVersion 4.66
 #===============================================================================
 # Change made
 # ==2011==
@@ -260,6 +260,8 @@ set releaseVersion 4.65
 #       120. Release on Jan 8th
 # Version 4.65
 #		121. Add support for NGPF
+# Version 4.66
+#		122. Release on May 14th
 
 proc GetEnvTcl { product } {
    
