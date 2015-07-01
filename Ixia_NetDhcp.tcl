@@ -3021,6 +3021,7 @@ class Dot1xHost {
 	    array set rangeStats [list]
 	    if { $onStack == "null" } {
 Deputs "new dot1x endpoint"
+            chain
 			if { [ llength [ixNet getL $hPort/protocolStack ethernetEndpoint] ] > 0 } {
 				set sg_ethernet [ lindex [ixNet getL $hPort/protocolStack ethernetEndpoint] 0 ]
 			} else {

@@ -262,10 +262,12 @@ Deputs "----- TAG: $tag -----"
     set root    [ ixNet getRoot ]
     set vport   [ ixNet add $root vport ]
     ixNet setA $vport -name $this
+    
 	if { $medium != "NULL" } {
 Deputs "connect medium:$medium"	
 		ixNet setA $vport/l1Config/ethernet -media $medium
 	}
+    ixNet commit
     set vport [ixNet remapIds $vport]
     set handle $vport
 # -- connect to hardware
@@ -293,7 +295,7 @@ Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
 	set handle [ixNet remapIds $handle]
 Deputs "handle:$handle"	
 	ixNet setA $vport -transmitIgnoreLinkStatus True
-       ixNet commit
+       ixNet commit       
  
 	return $handle
 }
@@ -412,6 +414,7 @@ body Port::config { args } {
     set mask 24
     set ipv6_mask 64
     set intf_num 1
+    set ip_version "ipv4"
 	
     set flow_control 0
 	set sig_end 1
