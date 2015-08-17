@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.54
+# Release Version 1.55
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -131,6 +131,8 @@
 #	66. add Traffic::traffic_enable/traffic_disable
 # Version 1.54.4.8
 #	67. add Traffic::config -tx_mode custom|auto
+# Version 1.55
+#	68. add Traffic::get_stats_per_port2 with all port stats view
 
 # -- Class definition...
 class Traffic {
@@ -145,6 +147,7 @@ class Traffic {
     method get_status {} {}
     method get_stats { args } {}
 	method get_stats_per_port { args } {}
+	method get_stats_per_port2 { args } {}
     method get_hex_data {} {}
     #--private method
     method GetProtocolTemp { pro } {}
@@ -154,7 +157,7 @@ class Traffic {
     method GetQuickItem {} {}
     method CreatePerPortView { rxPort } {}
 	method CreatePerPrecedenceView {} {}
-    
+    method CreatePortView {} {}
 	method start {} {
 		set tag "body Traffic::start [info script]"
 Deputs "----- TAG: $tag -----"
@@ -2584,6 +2587,216 @@ Deputs "ret:$ret"
     return $ret
     
 }
+body Traffic::get_stats_per_port2 { args } {
+    set tag "body Traffic::get_stats_per_port2 [info script]"
+Deputs "----- TAG: $tag -----"
+
+# param collection --
+    foreach { key value } $args {
+	   set key [string tolower $key]
+	   switch -exact -- $key {
+		  -rx_port {
+			 set rx_port $value
+		  }
+	   }
+    }
+    
+    if { [ info exists rx_port ] == 0 } {
+	   set rx_port $portObj
+    }
+    
+    if { [ $rx_port isa Port ] == 0 } {
+	   error "$errNumber(1) key:port object value:$rx_port"
+    }
+
+    set root [ixNet getRoot]
+    set view  [ ixNet getF $root/statistics view -caption "trafficPerPortView($this)" ]
+    if { $view == "" } {
+		if { [ catch {
+#IxDebugOn
+			set view [ CreatePortView ]
+		} err ] } {
+Deputs "create stats err:$err"
+			return [ GetErrorReturnHeader "Cannot fetch traffic stats, please make sure the stream was created correctly." ]
+		}
+    }
+Deputs "view:$view"
+    set captionList             [ ixNet getA $view/page -columnCaptions ]
+Deputs "caption list:$captionList"
+	set rxPortIndex				[ lsearch -exact $captionList {Rx Port} ]
+    set txFramesIndex           [ lsearch -exact $captionList {Tx Frames} ]
+    set rxFramesIndex           [ lsearch -exact $captionList {Rx Frames} ]
+    set aveLatencyIndex         [ lsearch -exact $captionList {Store-Forward Avg Latency (ns)} ]
+    set minLatencyIndex         [ lsearch -exact $captionList {Store-Forward Min Latency (ns)} ]
+    set maxLatencyIndex         [ lsearch -exact $captionList {Store-Forward Max Latency (ns)} ]
+    set firstArrivalIndex       [ lsearch -exact $captionList {First TimeStamp} ]
+    set lastArrivalIndex        [ lsearch -exact $captionList {Last TimeStamp} ]
+    set txFrameRateIndex        [ lsearch -exact $captionList {Tx Frame Rate} ]
+    set rxFrameRateIndex        [ lsearch -exact $captionList {Rx Frame Rate} ]
+    set txByteRateIndex         [ lsearch -exact $captionList {Tx Rate (Bps)} ]
+    set rxByteRateIndex         [ lsearch -exact $captionList {Rx Rate (Bps)} ]
+    set txBitRateIndex          [ lsearch -exact $captionList {Tx Rate (bps)} ]
+    set rxBitRateIndex          [ lsearch -exact $captionList {Rx Rate (bps)} ]
+
+	set tx_l1_bit_rate			[ lsearch -exact $captionList {Tx L1 Rate (bps)} ]
+	set rx_l1_bit_rate			[ lsearch -exact $captionList {Rx L1 Rate (bps)} ]
+
+    set ret [ GetStandardReturnHeader ]
+	
+    set stats [ ixNet getA $view/page -rowValues ]
+Deputs "stats:$stats"
+
+    foreach row $stats {
+	   
+	   eval {set row} $row
+Deputs "row:$row"
+
+		set portVal		[ lindex $row $rxPortIndex ]
+		set portName [ ixNet getA [$rx_port cget -handle] -name ]
+		if { $portVal != $portName } {
+			continue
+		}
+		
+	   set statsItem   "tx_frame_count"
+	   set statsVal    [ lindex $row $txFramesIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "rx_frame_count"
+	   set statsVal    [ lindex $row $rxFramesIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		    
+	   set statsItem   "avg_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+			  
+	   set statsItem   "avg_latency"
+	   set statsVal    [ lindex $row $aveLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "duplicate_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "in_order_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "max_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "max_latency"
+	   set statsVal    [ lindex $row $maxLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "min_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "min_latency"
+	   set statsVal    [ lindex $row $minLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "out_seq_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "first_arrival_time"
+	   set statsVal    [ lindex $row $firstArrivalIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "last_arrival_time"
+	   set statsVal    [ lindex $row $lastArrivalIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_frame_rate"
+	   set statsVal    [ lindex $row $txFrameRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_frame_rate"
+	   set statsVal    [ lindex $row $rxFrameRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_byte_rate"
+	   set statsVal    [ lindex $row $txByteRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_byte_rate"
+	   set statsVal    [ lindex $row $rxByteRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_bit_rate"
+	   set statsVal    [ lindex $row $txBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_bit_rate"
+	   set statsVal    [ lindex $row $rxBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+	   set statsItem   "tx_l2_bit_rate"
+	   set statsVal    [ lindex $row $txBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_l2_bit_rate"
+	   set statsVal    [ lindex $row $rxBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+	   set statsItem   "tx_l1_bit_rate"
+	   set statsVal    [ lindex $row $tx_l1_bit_rate ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_l1_bit_rate"
+	   set statsVal    [ lindex $row $rx_l1_bit_rate ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+Deputs "ret:$ret"
+
+    }
+	   
+    return $ret
+    
+}
 body Traffic::CreatePerPortView { rxPort } {
     set tag "body Traffic::CreatePerPortView [info script]"
 Deputs "----- TAG: $tag -----"
@@ -2650,6 +2863,38 @@ Deputs "item filtered Id:$itemFId"
 		-value [ list 0 1 2 3 4 5 6 7 ] \
     ixNet commit
 Deputs "filter:[ixNet getL $customView/layer23TrafficFlowFilter trackingFilter]"	
+Deputs "stats :[ ixNet getL $customView statistic ]"
+    foreach s [ixNet getL $customView statistic] {
+	   ixNet setA $s -enabled true
+    }
+Deputs "stats view enabled..."
+    ixNet setA $customView -enabled true
+Deputs "custom view enabled"
+    ixNet commit
+    
+    return $customView
+}
+body Traffic::CreatePortView { } {
+    set tag "body Traffic::CreatePortView [info script]"
+Deputs "----- TAG: $tag -----"
+
+    set root [ixNet getRoot]
+    set customView          [ ixNet add $root/statistics view ]
+    ixNet setM  $customView -caption "trafficPerPortView($this)" -type layer23TrafficFlow  -visible true
+    ixNet commit
+    set customView          [ ixNet remapIds $customView ]
+Deputs "view:$customView"
+    
+Deputs "available item: [ixNet getL $customView availableTrafficItemFilter]"
+Deputs "available port: [ixNet getL $customView availablePortFilter]"
+ 
+Deputs "handle:$handle obj:$this" 
+	set itemFId	[ixNet getF $customView availableTrafficItemFilter -name $this]
+Deputs "item filtered Id:$itemFId"
+    ixNet setA $customView/layer23TrafficItemFilter -trafficItemFilterIds $itemFId    
+    ixNet setA $customView/layer23TrafficPortFilter -portFilterIds [ixNet getL $customView availablePortFilter]
+    
+    ixNet commit
 Deputs "stats :[ ixNet getL $customView statistic ]"
     foreach s [ixNet getL $customView statistic] {
 	   ixNet setA $s -enabled true
