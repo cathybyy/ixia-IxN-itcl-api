@@ -615,7 +615,8 @@ Deputs "segHex:$segHex"
 		}
 		set IP [ string range $newIp 1 end ]
 Deputs "IP:$IP"
-		return [ IncrementIPv6Addr $IP [ expr $seg * 16 ] ]
+		set ret [ IncrementIPv6Addr $IP [ expr $seg * 16 ] ]
+		
 	} else {
 		set segHex [format %x $segInt]
 		set segList [lreplace $segList $seg $seg $segHex]
@@ -624,9 +625,14 @@ Deputs "IP:$IP"
 			set newIp ${newIp}:$segment
 		}
 		set IP [ string range $newIp 1 end ]
-		return [ string tolower $IP ]
+		set ret [ string tolower $IP ]
 
 	}
+	
+	if { [ string index $ret end ] == ":"} {
+		set ret ${ret}0
+	}
+	return $ret
 }
 
 proc GetMatchedMask { tester_ip sut_ip } {

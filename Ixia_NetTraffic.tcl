@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.52
+# Release Version 1.55
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -129,6 +129,10 @@
 #	65. add VxlanHdr
 # Version 1.53.1.15
 #	66. add Traffic::traffic_enable/traffic_disable
+# Version 1.54.4.8
+#	67. add Traffic::config -tx_mode custom|auto
+# Version 1.55
+#	68. add Traffic::get_stats_per_port2 with all port stats view
 
 # -- Class definition...
 class Traffic {
@@ -143,6 +147,7 @@ class Traffic {
     method get_status {} {}
     method get_stats { args } {}
 	method get_stats_per_port { args } {}
+	method get_stats_per_port2 { args } {}
     method get_hex_data {} {}
     #--private method
     method GetProtocolTemp { pro } {}
@@ -152,7 +157,7 @@ class Traffic {
     method GetQuickItem {} {}
     method CreatePerPortView { rxPort } {}
 	method CreatePerPrecedenceView {} {}
-    
+    method CreatePortView {} {}
 	method start {} {
 		set tag "body Traffic::start [info script]"
 Deputs "----- TAG: $tag -----"
@@ -517,13 +522,11 @@ Deputs "----- TAG: $tag -----"
 
 		set root    [ixNet getRoot]
 		set handle  [ixNet add $root/traffic trafficItem]
-
-		regexp {\d+} $handle id
-		ixNet setM $handle \
-			-name $this
-Deputs "traffic item handle:$handle"
-
 	}
+	regexp {\d+} $handle id
+	ixNet setM $handle \
+		-name $this
+Deputs "traffic item handle:$handle"
 	
 	set portObj $port
 Deputs "portObj:$portObj"
@@ -1894,7 +1897,9 @@ Deputs "epId:$epId"
 	Deputs "srcMac: [ixNet getA $src -startValue]"
 	Deputs "dstMac: [ixNet getA $dst -startValue]"
 			set regenerate 0
-			if { [ixNet getA $dst -singleValue] == "00:00:00:00:00:00" && [ixNet getA $dst -startValue] == "00:00:00:00:00:00" } {
+			if { [ixNet getA $dst -singleValue] == "00:00:00:00:00:00" &&
+			[ixNet getA $dst -startValue] == "00:00:00:00:00:00" &&
+			[ llength [ixNet getA $dst -valueList] ] == 0 } {
 Deputs "Step260"		
 				if { [ llength $dstMac ] > 0 } {
 					ixNet setM $dst -valueType valueList -valueList $dstMac
@@ -1904,7 +1909,9 @@ Deputs "Step260"
 				
 				set regenerate 1
 			}
-			if { [ixNet getA $src -singleValue] == "00:00:00:00:00:00" && [ixNet getA $src -startValue] == "00:00:00:00:00:00" } {
+			if { [ixNet getA $src -singleValue] == "00:00:00:00:00:00" &&
+			[ixNet getA $src -startValue] == "00:00:00:00:00:00" &&
+			[ llength [ ixNet getA $src -valueList ] ] == 0 } {
 Deputs "Step270"		
 				if { [ llength $srcMac ] > 0 } {
 					ixNet setM $src -valueType valueList -valueList $srcMac
@@ -2367,10 +2374,10 @@ Deputs "stats val:$statsVal"
 Deputs "ret:$ret"
 
     }
-	
-	ixNet remove $view
-	ixNet commit
-	   
+	catch {
+		ixNet remove $view
+		ixNet commit
+	}
     return $ret
     
 }
@@ -2580,6 +2587,216 @@ Deputs "ret:$ret"
     return $ret
     
 }
+body Traffic::get_stats_per_port2 { args } {
+    set tag "body Traffic::get_stats_per_port2 [info script]"
+Deputs "----- TAG: $tag -----"
+
+# param collection --
+    foreach { key value } $args {
+	   set key [string tolower $key]
+	   switch -exact -- $key {
+		  -rx_port {
+			 set rx_port $value
+		  }
+	   }
+    }
+    
+    if { [ info exists rx_port ] == 0 } {
+	   set rx_port $portObj
+    }
+    
+    if { [ $rx_port isa Port ] == 0 } {
+	   error "$errNumber(1) key:port object value:$rx_port"
+    }
+
+    set root [ixNet getRoot]
+    set view  [ ixNet getF $root/statistics view -caption "trafficPerPortView($this)" ]
+    if { $view == "" } {
+		if { [ catch {
+#IxDebugOn
+			set view [ CreatePortView ]
+		} err ] } {
+Deputs "create stats err:$err"
+			return [ GetErrorReturnHeader "Cannot fetch traffic stats, please make sure the stream was created correctly." ]
+		}
+    }
+Deputs "view:$view"
+    set captionList             [ ixNet getA $view/page -columnCaptions ]
+Deputs "caption list:$captionList"
+	set rxPortIndex				[ lsearch -exact $captionList {Rx Port} ]
+    set txFramesIndex           [ lsearch -exact $captionList {Tx Frames} ]
+    set rxFramesIndex           [ lsearch -exact $captionList {Rx Frames} ]
+    set aveLatencyIndex         [ lsearch -exact $captionList {Store-Forward Avg Latency (ns)} ]
+    set minLatencyIndex         [ lsearch -exact $captionList {Store-Forward Min Latency (ns)} ]
+    set maxLatencyIndex         [ lsearch -exact $captionList {Store-Forward Max Latency (ns)} ]
+    set firstArrivalIndex       [ lsearch -exact $captionList {First TimeStamp} ]
+    set lastArrivalIndex        [ lsearch -exact $captionList {Last TimeStamp} ]
+    set txFrameRateIndex        [ lsearch -exact $captionList {Tx Frame Rate} ]
+    set rxFrameRateIndex        [ lsearch -exact $captionList {Rx Frame Rate} ]
+    set txByteRateIndex         [ lsearch -exact $captionList {Tx Rate (Bps)} ]
+    set rxByteRateIndex         [ lsearch -exact $captionList {Rx Rate (Bps)} ]
+    set txBitRateIndex          [ lsearch -exact $captionList {Tx Rate (bps)} ]
+    set rxBitRateIndex          [ lsearch -exact $captionList {Rx Rate (bps)} ]
+
+	set tx_l1_bit_rate			[ lsearch -exact $captionList {Tx L1 Rate (bps)} ]
+	set rx_l1_bit_rate			[ lsearch -exact $captionList {Rx L1 Rate (bps)} ]
+
+    set ret [ GetStandardReturnHeader ]
+	
+    set stats [ ixNet getA $view/page -rowValues ]
+Deputs "stats:$stats"
+
+    foreach row $stats {
+	   
+	   eval {set row} $row
+Deputs "row:$row"
+
+		set portVal		[ lindex $row $rxPortIndex ]
+		set portName [ ixNet getA [$rx_port cget -handle] -name ]
+		if { $portVal != $portName } {
+			continue
+		}
+		
+	   set statsItem   "tx_frame_count"
+	   set statsVal    [ lindex $row $txFramesIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "rx_frame_count"
+	   set statsVal    [ lindex $row $rxFramesIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		    
+	   set statsItem   "avg_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+			  
+	   set statsItem   "avg_latency"
+	   set statsVal    [ lindex $row $aveLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "duplicate_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "in_order_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "max_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "max_latency"
+	   set statsVal    [ lindex $row $maxLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "min_jitter"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+		
+	   set statsItem   "min_latency"
+	   set statsVal    [ lindex $row $minLatencyIndex ]
+		#-- adjust to us
+		if { $statsVal == "" } {
+			set statsVal	"NA"
+		} else {
+			set statsVal 	[ expr $statsVal / 1000 ] 
+		}
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "out_seq_frame_count"
+	   set statsVal    "NA"
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "first_arrival_time"
+	   set statsVal    [ lindex $row $firstArrivalIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "last_arrival_time"
+	   set statsVal    [ lindex $row $lastArrivalIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_frame_rate"
+	   set statsVal    [ lindex $row $txFrameRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_frame_rate"
+	   set statsVal    [ lindex $row $rxFrameRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_byte_rate"
+	   set statsVal    [ lindex $row $txByteRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_byte_rate"
+	   set statsVal    [ lindex $row $rxByteRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "tx_bit_rate"
+	   set statsVal    [ lindex $row $txBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_bit_rate"
+	   set statsVal    [ lindex $row $rxBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+	   set statsItem   "tx_l2_bit_rate"
+	   set statsVal    [ lindex $row $txBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_l2_bit_rate"
+	   set statsVal    [ lindex $row $rxBitRateIndex ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+	   set statsItem   "tx_l1_bit_rate"
+	   set statsVal    [ lindex $row $tx_l1_bit_rate ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+	   
+	   set statsItem   "rx_l1_bit_rate"
+	   set statsVal    [ lindex $row $rx_l1_bit_rate ]
+Deputs "stats val:$statsVal"
+	   set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+
+Deputs "ret:$ret"
+
+    }
+	   
+    return $ret
+    
+}
 body Traffic::CreatePerPortView { rxPort } {
     set tag "body Traffic::CreatePerPortView [info script]"
 Deputs "----- TAG: $tag -----"
@@ -2657,6 +2874,38 @@ Deputs "custom view enabled"
     
     return $customView
 }
+body Traffic::CreatePortView { } {
+    set tag "body Traffic::CreatePortView [info script]"
+Deputs "----- TAG: $tag -----"
+
+    set root [ixNet getRoot]
+    set customView          [ ixNet add $root/statistics view ]
+    ixNet setM  $customView -caption "trafficPerPortView($this)" -type layer23TrafficFlow  -visible true
+    ixNet commit
+    set customView          [ ixNet remapIds $customView ]
+Deputs "view:$customView"
+    
+Deputs "available item: [ixNet getL $customView availableTrafficItemFilter]"
+Deputs "available port: [ixNet getL $customView availablePortFilter]"
+ 
+Deputs "handle:$handle obj:$this" 
+	set itemFId	[ixNet getF $customView availableTrafficItemFilter -name $this]
+Deputs "item filtered Id:$itemFId"
+    ixNet setA $customView/layer23TrafficItemFilter -trafficItemFilterIds $itemFId    
+    ixNet setA $customView/layer23TrafficPortFilter -portFilterIds [ixNet getL $customView availablePortFilter]
+    
+    ixNet commit
+Deputs "stats :[ ixNet getL $customView statistic ]"
+    foreach s [ixNet getL $customView statistic] {
+	   ixNet setA $s -enabled true
+    }
+Deputs "stats view enabled..."
+    ixNet setA $customView -enabled true
+Deputs "custom view enabled"
+    ixNet commit
+    
+    return $customView
+}
 
 # -- Header implmentation
 body EtherHdr::config { args } {
@@ -2683,12 +2932,16 @@ Deputs "----- TAG: $tag -----"
 	   set key [string tolower $key]
 	   switch -exact -- $key {
 		  -dst {
-			 set value [ MacTrans $value ]
-			 if { [ IsMacAddress $value ] } {
+			if { [ llength $value ] > 1 } {
 				set da $value
-			 } else {
-Deputs "wrong mac addr: $value"
-				error "$errNumber(1) key:$key value:$value"
+			} else {
+				 set value [ MacTrans $value ]
+				 if { [ IsMacAddress $value ] } {
+					set da $value
+				 } else {
+	Deputs "wrong mac addr: $value"
+					error "$errNumber(1) key:$key value:$value"
+				 }
 			 }
 		  }
 		  -dst_num {
@@ -2718,12 +2971,17 @@ Deputs "daStep:$daStep"
 			 }
 		  }
 		  -src {
-			 set value [ MacTrans $value ]
-			 if { [ IsMacAddress $value ] } {
+			if { [ llength $value ] > 1 } {
 				set sa $value
-					set noMac 0
-			 } else {
-				error "$errNumber(1) key:$key value:$value"
+						set noMac 0
+			} else {
+				 set value [ MacTrans $value ]
+				 if { [ IsMacAddress $value ] } {
+					set sa $value
+						set noMac 0
+				 } else {
+					error "$errNumber(1) key:$key value:$value"
+				 }
 			 }
 		  }
 		  -src_num {
@@ -2780,6 +3038,9 @@ Deputs Step3
 					random {
 						set saReCnt Random
 					}
+					list {
+						set saReCnt List
+					}
 				}
 			}
 			-dst_range_mode {
@@ -2793,6 +3054,9 @@ Deputs Step3
 					}
 					random {
 						set daReCnt Random
+					}
+					list {
+						set daReCnt List
 					}
 				}
 			}
@@ -2812,7 +3076,8 @@ Deputs Step50
 	   if { [ info exists daReCnt ] } {
 Deputs Step60
 		  switch -exact $daReCnt {
-			 Fixed {
+			 Fixed -
+			 List {
 Deputs Step70
 				AddFieldMode $daReCnt
 				AddField destinationAddress
@@ -2843,7 +3108,8 @@ Deputs Step100
 	   if { [ info exists saReCnt ] } {
 Deputs Step110
 		  switch -exact $saReCnt {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $saReCnt
 				AddField sourceAddress
 				AddFieldConfig $sa
@@ -3470,15 +3736,15 @@ Deputs Step10
 			 }
 			}
 			-src {
-			Deputs "set ip address...$value"
-				foreach addr $value {
-					if { [ IsIPv4Address $addr ] } {
-						set sa $value
-						set noIp	0
-					Deputs "sa:$sa"
-					} else {
-						error "$errNumber(1) key:$key value:$value"
+				if { [ llength $value ] > 1000 } {
+					set sa $value
+				} else {
+					foreach addr $value {
+						 if { ![ IsIPv4Address $addr ] } {
+							error "$errNumber(1) key:$key value:$addr"
+						}
 					}
+					set sa $value
 				}
 			}
 			-src_num {
@@ -3510,13 +3776,16 @@ Deputs Step10
 			 }                    
 			}
 			-dst {
-			foreach addr $value {
-				 if { [ IsIPv4Address $addr ] } {
+				if { [ llength $value ] > 1000 } {
 					set da $value
-				 } else {
-					error "$errNumber(1) key:$key value:$value"
-				 }
-			 }
+				} else {
+					foreach addr $value {
+						 if { ![ IsIPv4Address $addr ] } {
+							error "$errNumber(1) key:$key value:$addr"
+						}
+					}
+					set da $value
+				}
 			}
 			-dst_num {
 			 set trans [ UnitTrans $value ]
@@ -3937,6 +4206,9 @@ Deputs "Dst addr num: $trans"
 					random {
 						set samode Random
 					}
+					list {
+						set samode List						
+					}
 				}
 			}
 			-dst_range_mode {
@@ -3949,6 +4221,9 @@ Deputs "Dst addr num: $trans"
 						set damode Decrementing
 					}
 					random {
+						set damode Random
+					}
+					list {
 						set damode Random
 					}
 				}
@@ -3998,7 +4273,8 @@ Deputs "Pro: $pro"
     if { [ info exists sourceAddress ] } {
 	   if { [ info exists samode ] } {
 		  switch -exact $samode {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $samode
 				AddField srcIP
 				AddFieldConfig $sourceAddress
@@ -4026,7 +4302,8 @@ Deputs "saStep:$saStep"
     if { [ info exists destinationAddress ] } {
 	   if { [ info exists damode ] } {
 		  switch -exact $damode {
-			 Fixed {
+			 Fixed -
+			 List {
 				AddFieldMode $damode
 				AddField dstIP
 				AddFieldConfig $destinationAddress

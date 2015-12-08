@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.64
+set releaseVersion 4.66
 #===============================================================================
 # Change made
 # ==2011==
@@ -257,7 +257,11 @@ set releaseVersion 4.64
 #       119. change server serverPort to remote_server remote_serverPort 
 # 2015
 # Version 4.64
-#       120. Release on Jun 8th
+#       120. Release on Jan 8th
+# Version 4.65
+#		121. Add support for NGPF
+# Version 4.66
+#		122. Release on May 14th
 
 proc GetEnvTcl { product } {
    
@@ -285,7 +289,7 @@ proc loadconfig { filename } {
     global trafficnamelist
     global tportlist
     puts "Loadconfig $filename"
-    ixNet exec loadConfig [ixNet readForm $filename]
+    ixNet exec loadConfig [ixNet readFrom $filename]
     set root [ixNet getRoot]
     set portlist [ixNet getL $root vport]
     foreach portobj $portlist {
@@ -626,12 +630,12 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 } 
-puts "load package IxOperate..."
+puts "load package Ixia_NetDeviceGroup...."
 if { [ catch {
-	source [file join $currDir IxOperate.tcl]
+	source [file join $currDir Ixia_NetDeviceGroup.tcl]
 } err ] } {
 	if { [ catch {
-			source [file join $currDir IxOperate.tbc]
+			source [file join $currDir Ixia_NetDeviceGroup.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
@@ -677,13 +681,21 @@ proc ixNet { args } {
 	eval IxNet $args
 }
 
-if { [file exist "c:/windows/temp/ixlogfile"] } {
-} else {
-    file mkdir "c:/windows/temp/ixlogfile"
-}
 set timeVal  [ clock format [ clock seconds ] -format %Y%m%d_%H_%M ]
 set clickVal [ clock clicks ]
-set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+if { [file exist "c:/windows/temp/ixlogfile"] } {
+	set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+} elseif { [file exist "c:/temp/ixlogfile"] } {
+	set logfile_name "c:/temp/ixlogfile/$timeVal.txt"
+} else {
+	if { [ catch {
+		file mkdir "c:/windows/temp/ixlogfile"
+		set logfile_name "c:/windows/temp/ixlogfile/$timeVal.txt"
+	} ] } {
+		file mkdir "c:/temp/ixlogfile"
+		set logfile_name "c:/temp/ixlogfile/$timeVal.txt"
+	}
+}
 
 IxDebugOn
 IxDebugCmdOn

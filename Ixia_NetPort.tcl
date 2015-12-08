@@ -234,6 +234,8 @@ Deputs "location:$location"
 			regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
 		Deputs "chas:$chassis card:$card port$port"
 			set location ${chassis}/${card}/${port}
+			ixNet setA $handle -name $this
+			ixNet commit
 		}   
     }
 	set intf_mac 	 ""
