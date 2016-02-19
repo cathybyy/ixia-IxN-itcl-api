@@ -2663,7 +2663,7 @@ Deputs "----- TAG: $tag -----"
 class IPoEHost {
 
     inherit ProtocolStackObject
-	
+	public variable hIp
     constructor { port } { chain $port } {}
     method reborn {} {
 	    set tag "body IPoEHost::reborn [info script]"
@@ -2699,6 +2699,9 @@ class IPoEHost {
     }
 	
 	method config { args } {}
+	method start {} {}
+	method stop {} {}
+	method abort {} {}
 }
 body IPoEHost::config { args } {
     global errorInfo
@@ -2719,6 +2722,7 @@ Deputs "----- TAG: $tag -----"
 	set ipv6_prefix_len	64
 	set ipv6_gw			3ffe:3210::1
 	set ip_version		ipv4
+	set EgwIncrMode [list perSubnet perInterface]
 
 #param collection
 Deputs "Args:$args "
@@ -2738,6 +2742,7 @@ Deputs "Args:$args "
             -ip_addr_step {
 				set ip_addr_step $value
             }
+			-ip_mask -
 			-ip_prefix_len {
 				set ip_prefix_len $value
 			}
@@ -2747,11 +2752,29 @@ Deputs "Args:$args "
 			-ip_gw_addr_step {
 				set ip_gw_addr_step $value
 			}
+			-ip_gw_incr_mode {
+			    if {$value == "perSubnet" || $value == "perInterface"} {
+				    set ip_gw_incr_mode $value
+				}
+				
+			}
 			-ip_version {
 				set ip_version $value
 			}
+			-mss {
+			    set mss $value
+			}
 			-addr_mode {
 			    set ipv6auto $value
+			}
+			-auto_mac_generation {
+			    set auto_mac_generation $value
+			}
+			-enable_ipv6_config_rate {
+			    set enable_ipv6_config_rate $value
+			}
+			-ipv6_config_rate {
+			    set ipv6_config_rate $value
 			}
 
         }
@@ -2793,13 +2816,76 @@ Deputs "Args:$args "
 	if { [ info exists ip_gw_addr_step ] } {
 		ixNet setA $handle/ipRange -gatewayIncrement $ip_gw_addr_step
 	}
-
+	
+	if { [ info exists ip_gw_incr_mode ] } {
+		ixNet setA $handle/ipRange -gatewayIncrementMode $ip_gw_incr_mode
+	}
+	 
+	if { [ info exists mss ] } {
+		ixNet setA $handle/ipRange -mss $mss
+	}
+	
+	if { [ info exists auto_mac_generation ] } {
+		ixNet setA $handle/ipRange -autoMacGeneration $auto_mac_generation
+	}
+	ixNet commit
+	
+	set ipRangeOption [lindex [ixNet getL $hPort/protocolStack "ipRangeOptions"] 0 ]
+	if { [ info exists enable_ipv6_config_rate ] } {	
+	  
+		ixNet setA $ipRangeOption \
+			-ipv6ConfigRateEnable $enable_ipv6_config_rate
+			
+    }
+	if { [ info exists ipv6_config_rate ] } {	
+	  
+		ixNet setA $ipRangeOption \
+			-ipv6ConfigRate $ipv6_config_rate
+    }
 	ixNet commit
 	
 	
 
 }
 
+body IPoEHost::start {} {
+    set tag "body IPoEHost::start [info script]"
+Deputs "----- TAG: $tag -----"
+	after 3000
+	if { [ catch {
+		ixNet exec start $hIp async
+	} ] } {
+		after 3000
+		ixNet exec start $hIp async
+	}
+    return [GetStandardReturnHeader]
+}
+
+body IPoEHost::stop {} {
+    set tag "body IPoEHost::stop [info script]"
+Deputs "----- TAG: $tag -----"
+	after 3000
+	if { [ catch {
+		ixNet exec stop $hIp async
+	} ] } {
+		after 3000
+		ixNet exec stop $hIp async
+	}
+    return [GetStandardReturnHeader]
+}
+
+body IPoEHost::abort {} {
+    set tag "body IPoEHost::abort [info script]"
+Deputs "----- TAG: $tag -----"
+	after 3000
+	if { [ catch {
+		ixNet exec abort $hIp async
+	} ] } {
+		after 3000
+		ixNet exec abort $hIp async
+	}
+    return [GetStandardReturnHeader]
+}
 
 class Ipv6AutoConfigHost {
 
@@ -2860,6 +2946,7 @@ class Ipv6AutoConfigHost {
 	method config { args } {}
 	method start {} {}
     method stop {} {}
+	method abort {} {}
 }
 body Ipv6AutoConfigHost::config { args } {
     global errorInfo
@@ -2871,6 +2958,17 @@ Deputs "----- TAG: $tag -----"
     eval { chain } $args
 	
 	set count 			1
+	set enable_static_ip "false"
+	set ipv4_addr		1.1.1.2
+	set ipv4_addr_step	0.0.0.1
+	set ipv4_prefix_len	24
+	set ipv4_gw			1.1.1.1
+	set ipv6_addr		"3ffe:3210::2"
+	set ipv6_addr_step	::1
+	set ipv6_prefix_len	64
+	set ipv6_gw			3ffe:3210::1
+	set ip_version		ipv4
+	set EgwIncrMode [list perSubnet perInterface]
 	
 
 #param collection
@@ -2909,6 +3007,49 @@ Deputs "Args:$args "
 			-router_solicitation_retries {
 				set router_solicitation_retries $value
 			}
+			-enable_static_ip {
+			    set enable_static_ip [ string tolower $value ]
+			}
+			-ip_addr {
+				set ip_addr $value
+            }
+            -ip_addr_step {
+				set ip_addr_step $value
+            }
+			-ip_mask -
+			-ip_prefix_len {
+				set ip_prefix_len $value
+			}
+			-ip_gw_addr {
+				set ip_gw_addr $value
+			}
+			-ip_gw_addr_step {
+				set ip_gw_addr_step $value
+			}
+			-ip_gw_incr_mode {
+			    if {$value == "perSubnet" || $value == "perInterface"} {
+				    set ip_gw_incr_mode $value
+				}
+				
+			}
+			-ip_version {
+				set ip_version $value
+			}
+			-mss {
+			    set mss $value
+			}
+			-addr_mode {
+			    set ipv6auto $value
+			}
+			-auto_mac_generation {
+			    set auto_mac_generation $value
+			}
+			-enable_ipv6_config_rate {
+			    set enable_ipv6_config_rate $value
+			}
+			-ipv6_config_rate {
+			    set ipv6_config_rate $value
+			}
 			
         }
     }
@@ -2918,9 +3059,86 @@ Deputs "Args:$args "
 		ixNet setA $handle/ipRange -count $count
 	}
 	
+	set ipRangeOption [lindex [ixNet getL $hPort/protocolStack "ipRangeOptions"] 0 ]
 	
-	ixNet setA $handle/ipRange -ipType IPv6
+	if { $enable_static_ip == "true" } {
+	    ixNet setAttrs $ipRangeOption \
+            -ipv6AddressMode static
+		
+		ixNet commit
+		
+	    if { [ info exists ip_version ] } {
+			switch [ string tolower $ip_version ] {
+				ipv4 {
+					set ip_version IPv4
+				}
+				ipv6 {
+					set ip_version IPv6
+				}
+			}
+			ixNet setA $handle/ipRange -ipType $ip_version
+			ixNet commit
+		}
+	
+		if { [ info exists ip_addr ] } {
+			ixNet setA $handle/ipRange -ipAddress $ip_addr
+		}
+		
+		if { [ info exists ip_addr_step ] } {
+			ixNet setA $handle/ipRange -incrementBy $ip_addr_step
+		}
+		
+		if { [ info exists ip_prefix_len ] } {
+			ixNet setA $handle/ipRange -prefix $ip_prefix_len
+		}
+
+		if { [ info exists ip_gw_addr ] } {
+			ixNet setA $handle/ipRange -gatewayAddress $ip_gw_addr
+		}
+		
+		if { [ info exists ip_gw_addr_step ] } {
+			ixNet setA $handle/ipRange -gatewayIncrement $ip_gw_addr_step
+		}
+		
+		if { [ info exists ip_gw_incr_mode ] } {
+			ixNet setA $handle/ipRange -gatewayIncrementMode $ip_gw_incr_mode
+		}
+		 
+		if { [ info exists mss ] } {
+			ixNet setA $handle/ipRange -mss $mss
+		}
+		
+		if { [ info exists auto_mac_generation ] } {
+			ixNet setA $handle/ipRange -autoMacGeneration $auto_mac_generation
+		}
+		ixNet commit
+		
+	
+	
+	} else {
+	    ixNet setAttrs $ipRangeOption \
+            -ipv6AddressMode {autoconf}
+		
+		ixNet commit
+	    ixNet setA $handle/ipRange -ipType IPv6
+	    ixNet commit
+	
+	}
+	
+	
+	if { [ info exists enable_ipv6_config_rate ] } {	
+	  
+		ixNet setA $ipRangeOption \
+			-ipv6ConfigRateEnable $enable_ipv6_config_rate
+			
+	}
+	if { [ info exists ipv6_config_rate ] } {	
+	  
+		ixNet setA $ipRangeOption \
+			-ipv6ConfigRate $ipv6_config_rate
+	}
 	ixNet commit
+	
 	
 	
 	if { [ info exists dad_enabled ] } {
@@ -2974,6 +3192,19 @@ body Ipv6AutoConfigHost::stop {} {
 Deputs "----- TAG: $tag -----"
 Deputs "handle : $handle"
     ixNet exec stop $hIp
+    return [GetStandardReturnHeader]
+}
+
+body Ipv6AutoConfigHost::abort {} {
+    set tag "body Ipv6AutoConfigHost::abort [info script]"
+Deputs "----- TAG: $tag -----"
+	after 3000
+	if { [ catch {
+		ixNet exec abort $hIp async
+	} ] } {
+		after 3000
+		ixNet exec abort $hIp async
+	}
     return [GetStandardReturnHeader]
 }
 
