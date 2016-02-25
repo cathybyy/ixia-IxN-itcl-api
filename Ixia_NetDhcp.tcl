@@ -2962,11 +2962,11 @@ Deputs "----- TAG: $tag -----"
 	set ipv4_addr		1.1.1.2
 	set ipv4_addr_step	0.0.0.1
 	set ipv4_prefix_len	24
-	set ipv4_gw			1.1.1.1
+	set ipv4_gw_addr	1.1.1.1
 	set ipv6_addr		"3ffe:3210::2"
 	set ipv6_addr_step	::1
 	set ipv6_prefix_len	64
-	set ipv6_gw			3ffe:3210::1
+	set ipv6_gw_addr	3ffe:3210::1
 	set ip_version		ipv4
 	set EgwIncrMode [list perSubnet perInterface]
 	
@@ -3010,25 +3010,47 @@ Deputs "Args:$args "
 			-enable_static_ip {
 			    set enable_static_ip [ string tolower $value ]
 			}
-			-ip_addr {
-				set ip_addr $value
+			-ipv4_addr {
+				set ipv4_addr $value
             }
-            -ip_addr_step {
-				set ip_addr_step $value
+            -ipv4_addr_step {
+				set ipv4_addr_step $value
             }
-			-ip_mask -
-			-ip_prefix_len {
-				set ip_prefix_len $value
+			-ipv4_mask -
+			-ipv4_prefix_len {
+				set ipv4_prefix_len $value
 			}
-			-ip_gw_addr {
-				set ip_gw_addr $value
+			-ipv4_gw_addr {
+				set ipv4_gw_addr $value
 			}
-			-ip_gw_addr_step {
-				set ip_gw_addr_step $value
+			-ipv4_gw_addr_step {
+				set ipv4_gw_addr_step $value
 			}
-			-ip_gw_incr_mode {
+			-ipv4_gw_incr_mode {
 			    if {$value == "perSubnet" || $value == "perInterface"} {
-				    set ip_gw_incr_mode $value
+				    set ipv4_gw_incr_mode $value
+				}
+				
+			}
+			-ipv6_addr {
+				set ipv6_addr $value
+            }
+            -ipv6_addr_step {
+				set ipv6_addr_step $value
+            }
+			-ipv6_mask -
+			-ipv6_prefix_len {
+				set ipv6_prefix_len $value
+			}
+			-ipv6_gw_addr {
+				set ipv6_gw_addr $value
+			}
+			-ipv6_gw_addr_step {
+				set ipv6_gw_addr_step $value
+			}
+			-ipv6_gw_incr_mode {
+			    if {$value == "perSubnet" || $value == "perInterface"} {
+				    set ipv6_gw_incr_mode $value
 				}
 				
 			}
@@ -3079,30 +3101,56 @@ Deputs "Args:$args "
 			ixNet setA $handle/ipRange -ipType $ip_version
 			ixNet commit
 		}
-	
-		if { [ info exists ip_addr ] } {
-			ixNet setA $handle/ipRange -ipAddress $ip_addr
-		}
-		
-		if { [ info exists ip_addr_step ] } {
-			ixNet setA $handle/ipRange -incrementBy $ip_addr_step
-		}
-		
-		if { [ info exists ip_prefix_len ] } {
-			ixNet setA $handle/ipRange -prefix $ip_prefix_len
-		}
+	    if { $ip_version == "IPv4" } {
+		    if { [ info exists ipv4_addr ] } {
+			ixNet setA $handle/ipRange -ipAddress $ipv4_addr
+			}
+			
+			if { [ info exists ipv4_addr_step ] } {
+				ixNet setA $handle/ipRange -incrementBy $ipv4_addr_step
+			}
+			
+			if { [ info exists ipv4_prefix_len ] } {
+				ixNet setA $handle/ipRange -prefix $ipv4_prefix_len
+			}
 
-		if { [ info exists ip_gw_addr ] } {
-			ixNet setA $handle/ipRange -gatewayAddress $ip_gw_addr
+			if { [ info exists ipv4_gw_addr ] } {
+				ixNet setA $handle/ipRange -gatewayAddress $ipv4_gw_addr
+			}
+			
+			if { [ info exists ipv4_gw_addr_step ] } {
+				ixNet setA $handle/ipRange -gatewayIncrement $ipv4_gw_addr_step
+			}
+			
+			if { [ info exists ipv4_gw_incr_mode ] } {
+				ixNet setA $handle/ipRange -gatewayIncrementMode $ipv4_gw_incr_mode
+			}
+		} else {
+		    if { [ info exists ipv6_addr ] } {
+				ixNet setA $handle/ipRange -ipAddress $ipv6_addr
+			}
+			
+			if { [ info exists ipv6_addr_step ] } {
+				ixNet setA $handle/ipRange -incrementBy $ipv6_addr_step
+			}
+			
+			if { [ info exists ipv6_prefix_len ] } {
+				ixNet setA $handle/ipRange -prefix $ipv6_prefix_len
+			}
+
+			if { [ info exists ipv6_gw_addr ] } {
+				ixNet setA $handle/ipRange -gatewayAddress $ipv6_gw_addr
+			}
+			
+			if { [ info exists ipv6_gw_addr_step ] } {
+				ixNet setA $handle/ipRange -gatewayIncrement $ipv6_gw_addr_step
+			}
+			
+			if { [ info exists ipv6_gw_incr_mode ] } {
+				ixNet setA $handle/ipRange -gatewayIncrementMode $ipv6_gw_incr_mode
+			}
 		}
 		
-		if { [ info exists ip_gw_addr_step ] } {
-			ixNet setA $handle/ipRange -gatewayIncrement $ip_gw_addr_step
-		}
-		
-		if { [ info exists ip_gw_incr_mode ] } {
-			ixNet setA $handle/ipRange -gatewayIncrementMode $ip_gw_incr_mode
-		}
 		 
 		if { [ info exists mss ] } {
 			ixNet setA $handle/ipRange -mss $mss
