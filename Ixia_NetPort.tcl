@@ -1132,6 +1132,13 @@ Deputs "Args:$args "
                     error "$errNumber(1) key:$key value:$value"
                 }
 			}
+			-max_outstanding_session {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value <= 100000 ) } {
+                    set max_outstanding_session $value
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+			}
 		}
 	}
 	
@@ -1161,6 +1168,9 @@ Deputs "Args:$args "
 	}
 	if { [ info exists release_rate_step ] } {
 		ixNet setA $globalSetting -teardownRateIncrement $release_rate_step
+	}
+	if { [ info exists max_outstanding_session ] } {
+		ixNet setA $globalSetting -maxOutstandingRequests $max_outstanding_session
 	}
 	
 	ixNet commit
