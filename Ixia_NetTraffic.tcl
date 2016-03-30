@@ -1154,8 +1154,13 @@ Deputs "create raw stream..."
 	Deputs "Pro: $protocol "
 	Deputs Step14
 				 set type [ string toupper [ $name cget -type ] ]
+				 if { $pindex == 0 } {
+				    $name ChangeType SET
+					set type [ string toupper [ $name cget -type ] ]
+				 }
 				 if { $type == "SET"  } {
 					if { $pindex == 0 } {
+					  
 		Deputs "first ethernet set..."
 					 } else {
 						$name ChangeType APP
@@ -5793,6 +5798,15 @@ Deputs "Pro: $pro"
     }
     SetProtocol custom
 	if { [ info exists pattern ] } {
+	    set len [ string length $pattern ]
+		if { $len >1 } {
+		    set temP ""
+		    foreach Element $pattern {
+			    set temP ${temP}${Element}
+			}
+			set pattern $temP
+		}
+	    
 		if { [ string first 0x $pattern  ] >= 0 } {
 			string replace $pattern 0 1
 		}
