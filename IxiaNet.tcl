@@ -298,11 +298,14 @@ proc loadconfig { filename } {
     
     set trafficlist [ixNet getL [ixNet getL $root traffic] trafficItem]
     foreach trafficItemobj $trafficlist {
-        set itemlist [ixNet getL $trafficItemobj highLevelStream]
-        foreach trafficobj $itemlist {
-            lappend trafficnamelist [ixNet getA $trafficobj -name]
-            lappend tportlist [ixNet getA $trafficobj -txPortName]
-        }
+	    lappend trafficnamelist [ixNet getA $trafficItemobj -name]
+		set itemlist [lindex [ixNet getL $trafficItemobj highLevelStream] 0]
+		lappend tportlist [ixNet getA $itemlist -txPortName]
+        # set itemlist [ixNet getL $trafficItemobj highLevelStream]
+        # foreach trafficobj $itemlist {
+            # lappend trafficnamelist [ixNet getA $trafficobj -name]
+            # lappend tportlist [ixNet getA $trafficobj -txPortName]
+        # }
     }
 
 }

@@ -751,7 +751,7 @@ Deputs "pdu:$pdu"
 			 }				
 		  }
 		  -load_unit {
-			  set value [ string toupper $value ]
+			 set value [ string toupper $value ]
 			 if { [ lsearch -exact $ELoadUnit $value ] >= 0 } {
 				
 				set load_unit $value
@@ -1383,6 +1383,12 @@ Deputs "Mesh the field:$obj"
 							  }
 							  Segment {
 							  }
+							  Random {
+							    Deputs "Random...continue"
+							    ixNet setA $obj \
+									-valueType nonRepeatableRandom 
+								ixNet commit
+							  }
 							  Reserved {
 	Deputs "Reserved...continue"
 								 continue
@@ -1496,6 +1502,12 @@ Deputs "fullMesh:[ixNet getA $obj -fullMesh ]"
 						   }
 						   Segment {
 						   }
+						   Random {
+							    Deputs "Random...continue"
+							    ixNet setA $obj \
+									-valueType nonRepeatableRandom 
+								ixNet commit
+							}
 						   Reserved {
 	Deputs "Reserved...continue"
 							  continue
@@ -3743,6 +3755,7 @@ Deputs Step10
 			-src {
 				if { [ llength $value ] > 1000 } {
 					set sa $value
+					set  noIp	0
 				} else {
 					foreach addr $value {
 						 if { ![ IsIPv4Address $addr ] } {
@@ -3750,6 +3763,7 @@ Deputs Step10
 						}
 					}
 					set sa $value
+					set  noIp	0
 				}
 			}
 			-src_num {
@@ -4022,6 +4036,7 @@ Deputs Step110
 	   if { [ info exists samode ] } {
 		  switch -exact $samode {
 			 Fixed -
+			 Random -
 			List {
 				AddFieldMode $samode
 				AddField srcIp
@@ -4054,6 +4069,7 @@ Deputs Step200
 	   if { [ info exists damode ] } {
 		  switch -exact $damode {
 			 Fixed -
+			 Random -
 			List {
 				AddFieldMode $damode
 				AddField dstIp
