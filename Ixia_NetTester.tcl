@@ -118,7 +118,12 @@ Deputs "----- TAG: $tag -----"
 		if { $restartCaptureJudgement } {
 			set portList [ ixNet getL $root vport ]
 			foreach hPort $portList {
-				if { [ ixNet getA $hPort/capture    -hardwareEnabled  ] } {
+				# if { [ ixNet getA $hPort/capture    -hardwareEnabled  ] } {
+					# set restartCapture 1
+					# break
+				# }
+                set cstate [ixNet getA $hPort/capture -isCaptureRunning]			
+				if { $cstate == "true" } {
 					set restartCapture 1
 					break
 				}
