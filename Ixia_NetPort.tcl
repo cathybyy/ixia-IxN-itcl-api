@@ -176,6 +176,7 @@ Deputs "----- TAG: $tag -----"
     
     method GetRealPort { chas card port } {}
     method Connect { location { medium NULL } { checkLink 0 } } {}
+    method Reconnect { location { medium NULL } { checkLink 0 } } {}
     method CheckStrangePort {} {}
     
     public variable location
@@ -263,25 +264,15 @@ body Port::Connect { location { medium NULL } { checkLink 0 } } {
 Deputs "----- TAG: $tag -----"
 # -- add vport
 
-    set root [ ixNet getRoot ]
-	Deputs "vport handle: $handle"
-
-	
-    if {$handle == ""} {
-	   
-       set vport   [ ixNet add $root vport ]
-       ixNet setA $vport -name $this
-	   ixNet commit
-	   set vport [ixNet remapIds $vport]
-       set handle $vport
-	}
-   
-    
+    set root    [ ixNet getRoot ]
+    set vport   [ ixNet add $root vport ]
+    ixNet setA $vport -name $this
 	if { $medium != "NULL" } {
 Deputs "connect medium:$medium"	
-		ixNet setA $handle/l1Config/ethernet -media $medium
+		ixNet setA $vport/l1Config/ethernet -media $medium
 	}
-    ixNet commit
+    set vport [ixNet remapIds $vport]
+    set handle $vport
    
 # -- connect to hardware
 	set locationInfo [ split $location "/" ]
@@ -309,6 +300,41 @@ Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
 Deputs "handle:$handle"	
 	ixNet setA $handle -transmitIgnoreLinkStatus True
        ixNet commit       
+ 
+	return $handle
+}
+
+body Port::Reconnect { location { medium NULL } { checkLink 0 } } {
+    set tag "body Port::Reconnect [info script]"
+Deputs "----- TAG: $tag -----"
+# -- add vport
+    set root    [ ixNet getRoot ]   
+# -- connect to hardware
+	set locationInfo [ split $location "/" ]
+	set chassis     [ lindex $locationInfo 0 ]
+	set ModuleNo    [ lindex $locationInfo 1 ]
+	set PortNo      [ lindex $locationInfo 2 ]
+
+	if { [ string tolower [ ixNet getA $root/statistics -guardrailEnabled ] ] != "true" } {
+Deputs "guardrail: false"
+		catch {
+			ixNet setA $root/statistics -guardrailEnabled True
+			ixNet commit
+		}
+Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
+	}
+
+	if { $checkLink } {
+		#fix license issue
+		ixTclNet::AssignPorts [ list [ list $chassis $ModuleNo $PortNo ] ] {} $handle true
+	} else {
+		ixNet setA $handle -connectedTo [ GetRealPort $chassis $ModuleNo $PortNo ] 
+		ixNet commit
+	}
+	set handle [ixNet remapIds $handle]
+Deputs "handle:$handle"	
+	ixNet setA $handle -transmitIgnoreLinkStatus True
+       ixNet commit
  
 	return $handle
 }
