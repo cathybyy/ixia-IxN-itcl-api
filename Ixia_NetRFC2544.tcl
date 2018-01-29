@@ -38,6 +38,8 @@
 # Version 1.11.4.60
 #		15. add net use to connect with IxNetwork Tcl Server
 #       16. change server to remote_server
+# Version 1.12.4.66
+#		17. add pdfreortdir pdfreportfile to generate pdf report
 
 class Rfc2544 {
     inherit NetObject
@@ -57,7 +59,7 @@ class Rfc2544 {
 	
     #trafficSelection - inTest
     public variable trafficSelection
-    #trafficSelection - background
+    #trafficBackground - background
     public variable trafficBackground
     public variable testtype
 }
@@ -104,13 +106,14 @@ body Rfc2544::config { args } {
     	
     set frame_len_type custom
     set load_unit percent
-    set duration 30
+    set duration 60
     set resolution 1
     set trial 1
     set traffic_mesh ""
     set bidirection 1
     set traffic_type L2
-    set latency_type lilo
+	#wangming
+    set latency_type lifo
     set measure_jitter 0
     set resultdir "d:/1"
     set resultfile "1.csv"
@@ -118,18 +121,40 @@ body Rfc2544::config { args } {
 	set no_run 0
 	set resultLevel 1
     set regenerate "false"
-	
+	set force false
+    
 	set frame_len_step 64
 	set frame_len_max  1518
 	set binary_mode perPort
     set EPayloadType [ list CYCBYTE INCRBYTE DECRBYTE PRBS USERDEFINE ]
     set EFillType   [ list constant incr decr prbs random ]
-    #set payload_type PRBS
-    set fill_type prbs
-
+    #set payload_type PRBS wangming
+	set enable_min_frame_size True
+    set fill_type random
+	set root [ixNet getRoot]
+    
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
+		    -frame_ordering_mode {
+                if { [string tolower $value] == "rfc2889" } {
+                    ixNet setA $root/traffic -enableStreamOrdering true
+                    ixNet setA $root/traffic -frameOrderingMode RFC2889
+                } elseif { [string tolower $value] == "none" } {
+                    ixNet setA $root/traffic -enableStreamOrdering fasle
+                    ixNet setA $root/traffic -frameOrderingMode none
+                } else {
+                    ixNet setA $root/traffic -enableStreamOrdering true
+                    ixNet setA $root/traffic -frameOrderingMode $value
+                }
+                ixNet commit
+            }
+            -enable_min_frame_size {
+				set enable_min_frame_size $value
+				ixNet setA $root/traffic \
+				-enableMinFrameSize $value
+				ixNet commit
+            }
         	-frame_len {
 				if { [ llength $value ] < 1 } {
 					 error "$errNumber(1) key:$key value:$value"
@@ -245,6 +270,20 @@ Deputs "frame len under test:$frame_len"
 			}
 			-resultfile {
                 	set resultfile $value
+        	}
+            -pdfreportdir {
+				set pdfreportdir $value
+			}
+			-pdfreportfile {
+                	set pdfreportfile $value
+        	}
+        	-force {
+				set trans [ BoolTrans $value ]
+				if { $trans == "1" || $trans == "0" } {
+					set force $value
+				} else {
+					error "$errNumber(1) key:$key value:$value"
+				}
         	}
 			-resultlvl {
 Deputs "set result level:$value"			
@@ -580,8 +619,9 @@ Deputs "Step120"
 		-binarySearchType $binary_mode \
 		-forceRegenerate $regenerate \
 		-rfc2889ordering val2889Ordering \
-		-enableMinFrameSize True \
-		-reportSequenceError True
+		-enableMinFrameSize $enable_min_frame_size 
+		#wangming
+		#-reportSequenceError False
 	ixNet setA $handle/learnFrames \
 		-learnSendMacOnly True
 
@@ -616,6 +656,13 @@ Deputs "Step150"
 	}
 	
     ixNet commit
+    
+    #enable pdf report generate
+    if { [info exists pdfreportdir] && [info exists pdfreportfile ]} {
+        ixNet setA ::ixNet::OBJ-/quickTest/globals  \
+             -enableGenerateReportAfterRun true
+        ixNet commit
+    }
 	
 	Tester::apply_traffic
 	
@@ -624,10 +671,229 @@ Deputs "Step150"
 		ixNet exec run $handle
 		ixNet exec waitForTest $handle
 	}
-
-
+       
 	if { [ info exists resultdir ] } {
 		global remote_server
+        Deputs "remote_server:$remote_server"
+		set path [ ixNet getA $handle/results -resultPath ]
+        Deputs "path:$path"
+		set colonIndex [ string first ":" $path ]
+		set path [ string replace $path $colonIndex $colonIndex "$" ]
+		if { $remote_server == "localhost" } {
+			set path "//127.0.0.1/$path"
+		} else {
+			set path "//${remote_server}/$path"
+			catch {
+                # net use \\10.206.25.116\c$\ixia ixia2014! /user:YL
+				exec cmd "/k net use $path $netuse_pw /user:$netuse_user" &
+			}
+		}
+        Deputs "path:$path"					
+
+		if { [ catch {
+            if { !$force } {
+                file copy $path $resultdir
+            } else {
+                file copy -force $path $resultdir
+            }
+		} err ] } {
+            Deputs "err:$err"
+		}
+		if { [ info exists resultfile ] } {
+            Deputs "result file:$resultfile"		
+		    if { [file exists $resultdir/$resultfile ] } {
+                Deputs "result file:$resultdir/$resultfile"
+			    if { [ catch {
+					#- DC format
+					set rfile [ open $resultdir/$resultfile r ]
+					set rpattern [ read -nonewline $rfile ]
+					close $rfile 
+					file delete $resultdir/$resultfile
+					
+					set apdfile [ open $resultdir/$resultfile a ]
+					puts $apdfile "\n"
+					puts $apdfile $rpattern
+					flush $apdfile
+					close $apdfile
+				} err ] } {
+				    return [GetErrorReturnHeader $err]
+			    }
+			} else {				
+			    if { [ catch {
+                    if { $resultLevel == 0 } {
+                        Deputs "copy aggregate results..."
+                        if { $measure_jitter } {
+                            Deputs "run jitter test on traffic: $trafficSelection"								
+                            set rfile [ open $path/aggregateresults.csv r ]
+                            set desfile [open $resultdir/$resultfile w+]
+
+                            close $desfile
+                            
+                            ixNet setMultiAttribute $root/traffic/statistics/latency -enabled false
+                            ixNet commit
+                            ixNet setMultiAttribute $root/traffic/statistics/delayVariation \
+                                -enabled true \
+                                -statisticsMode rxDelayVariationAverage \
+                                -latencyMode $latency_type
+                            ixNet commit
+                            set view {::ixNet::OBJ-/statistics/view:"Traffic Item Statistics"}
+                            set trafficlist {}
+                            set trafficitemlist [ ixNet getL $root/traffic trafficItem ]
+                            set enableList {}
+                            if {[ info exists teststream ] } {
+                                foreach stream $teststream {
+                                    lappend trafficlist [ $stream cget -handle ]
+                                }
+                            } else {
+
+                                set trafficlist $trafficitemlist
+                            }
+                            foreach item $trafficitemlist {
+                                lappend enableList [ ixNet getA $item -enabled ]
+                                ixNet setA $item -enabled false
+                                ixNet commit
+                                #ixNet exec generate $item
+                            }
+                            
+                            set trafficnum [ llength $trafficlist ]
+                            while {[gets $rfile line] != -1 } {
+                                set desfile [open $resultdir/$resultfile a]
+                                set statsinfo  [ split $line "," ]
+                                Deputs $statsinfo
+                                set fsize      [ lindex $statsinfo 1 ]
+                                Deputs $fsize
+                                if { [string is integer $fsize] } {
+                                    #wangming
+                                    set txrate     [ lindex $statsinfo 3 ]
+                                    #wangming
+                                    Deputs "wangming"
+                                    Deputs $txrate										
+
+                                    set itemtxrate [expr $txrate/$trafficnum]
+                                    foreach fstream $trafficlist {
+                                       set celement [ixNet getL $fstream configElement  ]
+                                       ixNet setA $celement/frameSize -fixedSize $fsize
+                                       ixNet setM $celement/frameRate \
+                                           -type percentLineRate \
+                                           -rate $itemtxrate
+                                        ixNet setA $fstream -enabled true
+                                        ixNet commit
+                                        ixNet exec generate $fstream
+                                                                                   
+                                    }
+                                    #ixNet commit
+                                    # ixNet exec apply $root/traffic
+                                    # after 10000
+                                    # foreach fstream $trafficlist {
+                                       # ixNet exec startStatelessTraffic $fstream
+                                       # after 1000
+                                    # }
+                                    Tester::start_traffic
+                                    #wangming
+                                    after $duration
+                                    Tester::stop_traffic
+                                    after 10000
+                                    set captionList    [ ixNet getA $view/page -columnCaptions ]
+                                    set aveLatencyIndex         [ lsearch  $captionList {*Avg Latency (ns)} ]
+                                    set minLatencyIndex         [ lsearch  $captionList {*Min Latency (ns)} ]
+                                    set maxLatencyIndex         [ lsearch  $captionList {*Max Latency (ns)} ]
+                                    set avejitterIndex          [ lsearch -exact $captionList {Avg Delay Variation (ns)} ]
+                                    set minjitterIndex          [ lsearch -exact $captionList {Min Delay Variation (ns)} ]
+                                    set maxjitterIndex          [ lsearch -exact $captionList {Max Delay Variation (ns)} ]
+                                    
+                                    set stats [ ixNet getA $view/page -rowValues ]
+                                    set aveLatency   0
+                                    set minLatency   0
+                                    set maxLatency   0
+                                    
+                                    set totallatency 0
+                                    
+                                    set totaljitter  0
+                                    set minjitter    0
+                                    set maxjitter    0
+                                    foreach row $stats {
+                                        eval {set row} $row
+                                    
+                                        set rowaveLatency   [ lindex $row $aveLatencyIndex ]
+                                        set rowminLatency   [ lindex $row $minLatencyIndex ]
+                                        set rowmaxLatency   [ lindex $row $maxLatencyIndex ]
+                                        
+                                        set rowavejitter    [ lindex $row $avejitterIndex ]
+                                        set rowminjitter    [ lindex $row $minjitterIndex ]
+                                        set rowmaxjitter    [ lindex $row $maxjitterIndex ]
+                                        
+                                        Deputs "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter "
+                                        if {$rowavejitter =="" || $rowaveLatency == ""} {
+                                            error "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter, some stats are empty "
+                                        }
+                                        
+                                          Deputs "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter "
+                                                                                   if {$rowavejitter =="" || $rowaveLatency == ""} {
+                                                                                        close $rfile
+                                                                                        error "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter, some stats are empty "
+                                                                                     }
+                                        
+                                        set totallatency    [expr $totallatency + $rowaveLatency]
+                                        if { $minLatency  == 0 || $rowminLatency < $minLatency } {
+                                            set minLatency $rowminLatency
+                                        } 
+                                        if { $maxLatency  == 0 || $rowmaxLatency > $maxLatency } {
+                                            set maxLatency $rowmaxLatency
+                                        }
+                                        set totaljitter    [expr $totaljitter + $rowavejitter]
+                                        if { $minjitter  == 0 || $rowminjitter < $minjitter } {
+                                            set mijitter $rowminjitter
+                                        } 
+                                        if { $maxjitter  == 0 || $rowmaxjitter > $maxjitter} {
+                                            set maxjitter $rowmaxjitter
+                                        }										
+                                    }
+                                    set aveLatency   [expr $totallatency/$trafficnum]
+                                    set avejitter   [expr $totaljitter/$trafficnum]
+                                    set rpattern "$line,$minLatency,$maxLatency,$aveLatency,$minjitter,$maxjitter,$avejitter"
+                                } else {
+                                   set rpattern "$line,Min Latency (ns),Max Latency (ns),Avg Latency (ns),Min Delay Variation (ns),Max Delay Variation (ns),Avg Delay Variation (ns)"
+                                }
+                                Deputs "rpattern:$rpattern"
+                                puts  $desfile $rpattern
+                                close $desfile
+                                
+                            }
+                            #set rpattern [ read -nonewline $rfile ]
+                            close $rfile
+                            
+                            ixNet setA $root/traffic/statistics/delayVariation  -enabled false	
+                            ixNet commit									
+                            ixNet setMultiAttribute $root/traffic/statistics/latency -enabled true \
+                                                          -mode $latency_type
+                            ixNet commit
+                            
+                            
+                            foreach suspend $enableList item $trafficitemlist {
+                                ixNet setA $item -enabled $suspend
+                            }
+                            ixNet commit
+
+                        } else {
+                            file copy $path/aggregateresults.csv $resultdir/$resultfile
+                        }
+                    }
+                    if { $resultLevel == 1 } {
+                        Deputs "copy results..."
+                        file copy $path/results.csv $resultdir/$resultfile
+                    }
+                } err ] } {
+                    catch { close $rfile }
+                    catch { close $desfile }
+                    catch { close $apdfile }
+                    return [GetErrorReturnHeader $err]
+                }
+            }
+		}	
+	}
+    
+    if { [info exists pdfreportdir] && [info exists pdfreportfile ]} {
+        global remote_server
 Deputs "remote_server:$remote_server"
 		set path [ ixNet getA $handle/results -resultPath ]
 Deputs "path:$path"
@@ -642,195 +908,18 @@ Deputs "path:$path"
 				exec cmd "/k net use $path $netuse_pw /user:$netuse_user" &
 			}
 		}
-Deputs "path:$path"					
+Deputs "path:$path"
 
-		if { [ catch {
-			file copy $path $resultdir
-		} err ] } {
-Deputs "err:$err"
-		}
-		if { [ info exists resultfile ] } {
-Deputs "result file:$resultfile"		
-		    if { [file exists $resultdir/$resultfile ] } {
-Deputs "result file:$resultdir/$resultfile"
-			    if { [ catch {
-				
-					#- DC format
-					set rfile [ open $resultdir/$resultfile r ]
-					set rpattern [ read -nonewline $rfile ]
-					close $rfile 
-					file delete $resultdir/$resultfile
-					
-					set apdfile [ open $resultdir/$resultfile a ]
-					puts $apdfile "\n"
-					puts $apdfile $rpattern
-					flush $apdfile
-					close $apdfile
-                 
-				} err ] } {
-				    return [GetErrorReturnHeader $err]
-			        }
-			} else {				
-			    if { [ catch {
-						if { $resultLevel == 0 } {
-Deputs "copy aggregate results..."
-							if { $measure_jitter } {
-Deputs "run jitter test on traffic: $trafficSelection"								
-								set rfile [ open $path/aggregateresults.csv r ]
-								set desfile [open $resultdir/$resultfile w+]
-
-
-								close $desfile
-								
-								ixNet setMultiAttribute $root/traffic/statistics/latency -enabled false
-								ixNet commit
-								ixNet setMultiAttribute $root/traffic/statistics/delayVariation \
-									-enabled true \
-									-statisticsMode rxDelayVariationAverage \
-									-latencyMode $latency_type
-								ixNet commit
-								set view {::ixNet::OBJ-/statistics/view:"Traffic Item Statistics"}
-								set trafficlist {}
-								set trafficitemlist [ ixNet getL $root/traffic trafficItem ]
-								set enableList {}
-								if {[ info exists teststream ] } {
-								    foreach stream $teststream {
-									    lappend trafficlist [ $stream cget -handle ]
-									}
-								} else {
- 
-									set trafficlist $trafficitemlist
-								}
-								foreach item $trafficitemlist {
-									lappend enableList [ ixNet getA $item -enabled ]
-									ixNet setA $item -enabled false
-									ixNet commit
-									#ixNet exec generate $item
-								}
-								
-								set trafficnum [ llength $trafficlist ]
-								while {[gets $rfile line] != -1 } {
-								    set desfile [open $resultdir/$resultfile a]
-								    set statsinfo  [ split $line "," ]
-                                    Deputs $statsinfo
-									set fsize      [ lindex $statsinfo 1 ]
-									Deputs $fsize
-									if { [string is integer $fsize] } {
-										set txrate     [ lindex $statsinfo 4 ]
-										set itemtxrate [expr $txrate/$trafficnum]
-										foreach fstream $trafficlist {
-										   set celement [ixNet getL $fstream configElement  ]
-										   ixNet setA $celement/frameSize -fixedSize $fsize
-										   ixNet setM $celement/frameRate \
-											   -type percentLineRate \
-											   -rate $itemtxrate
-											ixNet setA $fstream -enabled true
-									        ixNet commit
-											ixNet exec generate $fstream
-											  										   
-										}
-										#ixNet commit
-										# ixNet exec apply $root/traffic
-										# after 10000
-										# foreach fstream $trafficlist {
-										   # ixNet exec startStatelessTraffic $fstream
-										   # after 1000
-										# }
-										Tester::start_traffic
-										#set waittime [expr $duration *1000]
-										after 60000
-										Tester::stop_traffic
-										after 2000
-										set captionList    [ ixNet getA $view/page -columnCaptions ]
-										set aveLatencyIndex         [ lsearch  $captionList {*Avg Latency (ns)} ]
-										set minLatencyIndex         [ lsearch  $captionList {*Min Latency (ns)} ]
-										set maxLatencyIndex         [ lsearch  $captionList {*Max Latency (ns)} ]
-										set avejitterIndex          [ lsearch -exact $captionList {Avg Delay Variation (ns)} ]
-										set minjitterIndex          [ lsearch -exact $captionList {Min Delay Variation (ns)} ]
-										set maxjitterIndex          [ lsearch -exact $captionList {Max Delay Variation (ns)} ]
-										
-										set stats [ ixNet getA $view/page -rowValues ]
-										set aveLatency   0
-										set minLatency   0
-										set maxLatency   0
-										
-										set totallatency 0
-										
-										set totaljitter  0
-										set minjitter    0
-										set maxjitter    0
-										foreach row $stats {
-											eval {set row} $row
-										
-											set rowaveLatency   [ lindex $row $aveLatencyIndex ]
-											set rowminLatency   [ lindex $row $minLatencyIndex ]
-											set rowmaxLatency   [ lindex $row $maxLatencyIndex ]
-											
-											set rowavejitter    [ lindex $row $avejitterIndex ]
-											set rowminjitter    [ lindex $row $minjitterIndex ]
-											set rowmaxjitter    [ lindex $row $maxjitterIndex ]
-                                            
-                                            Deputs "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter "
-                                            if {$rowavejitter =="" || $rowaveLatency == ""} {
-                                                error "rowaveLatency:$rowaveLatency; rowavejitter:$rowavejitter, some stats are empty "
-                                            }
-											
-											set totallatency    [expr $totallatency + $rowaveLatency]
-											if { $minLatency  == 0 || $rowminLatency < $minLatency } {
-												set minLatency $rowminLatency
-											} 
-											if { $maxLatency  == 0 || $rowmaxLatency > $maxLatency } {
-												set maxLatency $rowmaxLatency
-											}
-											set totaljitter    [expr $totaljitter + $rowavejitter]
-											if { $minjitter  == 0 || $rowminjitter < $minjitter } {
-												set mijitter $rowminjitter
-											} 
-											if { $maxjitter  == 0 || $rowmaxjitter > $maxjitter} {
-												set maxjitter $rowmaxjitter
-											}										
-										}
-										set aveLatency   [expr $totallatency/$trafficnum]
-										set avejitter   [expr $totaljitter/$trafficnum]
-										set rpattern "$line,$minLatency,$maxLatency,$aveLatency,$minjitter,$maxjitter,$avejitter"
-									} else {
-									   set rpattern "$line,Min Latency (ns),Max Latency (ns),Avg Latency (ns),Min Delay Variation (ns),Max Delay Variation (ns),Avg Delay Variation (ns)"
-									}
-									Deputs "rpattern:$rpattern"
-									puts  $desfile $rpattern
-								    close $desfile
-									
-								}
-								#set rpattern [ read -nonewline $rfile ]
-								close $rfile
-								
-                                ixNet setA $root/traffic/statistics/delayVariation  -enabled false	
-                                ixNet commit									
-								ixNet setMultiAttribute $root/traffic/statistics/latency -enabled true \
-			                                                  -mode $latency_type
-								ixNet commit
-								
-								
-								foreach suspend $enableList item $trafficitemlist {
-									ixNet setA $item -enabled $suspend
-								}
-	                            ixNet commit
-
-							} else {
-								file copy $path/aggregateresults.csv $resultdir/$resultfile
-							}
-						}
-						if { $resultLevel == 1 } {
-Deputs "copy results..."
-							
-							file copy $path/results.csv $resultdir/$resultfile
-						}
-					} err ] } {
-						return [GetErrorReturnHeader $err]
-			        }
-			    }
-		}	
-	}
+        if { [file exists $path/TestReport.pdf ]} {
+            file copy $path/TestReport.pdf $pdfreportdir/$pdfreportfile
+        } else {
+            set err "No testReport.pdf created in $path"
+            return [GetErrorReturnHeader $err]
+            
+        }
+        
+        
+    }
 	
     return [GetStandardReturnHeader]
 

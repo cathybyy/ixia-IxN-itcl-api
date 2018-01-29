@@ -16,10 +16,68 @@ class IsisSession {
     constructor { port } {}
     method reborn {} {}
     method config { args } {}
-
+    method get_stats {} {}
+    
 	public variable mac_addr
 }
 
+body IsisSession::get_stats {} {
+    set tag "body IsisSession::get_stats [info script]"
+    Deputs "----- TAG: $tag -----"
+    set root [ixNet getRoot]
+	set view {::ixNet::OBJ-/statistics/view:"BGP Aggregated Statistics"}
+    # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
+    Deputs "view:$view"
+    set captionList             [ ixNet getA $view/page -columnCaptions ]
+    Deputs "caption list:$captionList"
+	set port_name				[ lsearch -exact $captionList {Stat Name} ]
+    set session_conf            [ lsearch -exact $captionList {Sess. Configured} ]
+    set session_succ            [ lsearch -exact $captionList {Sess. Up} ]
+    set flap         	        [ lsearch -exact $captionList {Session Flap Count} ]
+	
+    set ret [ GetStandardReturnHeader ]
+	
+    set stats [ ixNet getA $view/page -rowValues ]
+    Deputs "stats:$stats"
+
+    set connectionInfo [ ixNet getA $hPort -connectionInfo ]
+    Deputs "connectionInfo :$connectionInfo"
+    regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
+    Deputs "chas:$chassis card:$card port$port"
+
+    foreach row $stats {  
+        eval {set row} $row
+        Deputs "row:$row"
+        Deputs "portname:[ lindex $row $port_name ]"
+		if { [ string length $card ] == 1 } {
+			set card "0$card"
+		}
+		if { [ string length $port ] == 1 } {
+			set port "0$port"
+		}
+		if { "${chassis}/Card${card}/Port${port}" != [ lindex $row $port_name ] } {
+			continue
+		}
+
+        set statsItem   "session_conf"
+        set statsVal    [ lindex $row $session_conf ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+          
+        set statsItem   "session_succ"
+        set statsVal    [ lindex $row $session_succ ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+        
+        set statsItem   "flap"
+        set statsVal    [ lindex $row $flap ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+        Deputs "ret:$ret"
+    }
+        
+    return $ret
+}
 body IsisSession::reborn {} {
     set tag "body IsisSession::reborn [info script]"
     Deputs "----- TAG: $tag -----"
@@ -283,18 +341,16 @@ class SimulatedRoute {
 }
 
 body SimulatedRoute::config { args } {
-
 	global errorInfo
     global errNumber
     set tag "body SimulatedRoute::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
 	eval chain $args
 
 	foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
-            
 			-route_type {
 				set route_type $value
 			}

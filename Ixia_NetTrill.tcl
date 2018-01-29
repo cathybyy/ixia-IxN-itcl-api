@@ -335,14 +335,13 @@ body TrillSession::get_stats {} {
 	global errNumber
 	set tag "body TrillSession::get_stats [info script]"
     Deputs "----- TAG: $tag -----"
-	    set root [ixNet getRoot]
-	    set view {::ixNet::OBJ-/statistics/view:"ISIS Aggregated Statistics"}
+    set root [ixNet getRoot]
+    set view {::ixNet::OBJ-/statistics/view:"ISIS Aggregated Statistics"}
     Deputs "view:$view"
 	set captionList             [ ixNet getA $view/page -columnCaptions ]
     Deputs "caption list:$captionList"
-
-	   
-	    set port_name		[ lsearch -exact $captionList {Stat Name} ]
+   
+	set port_name		[ lsearch -exact $captionList {Stat Name} ]
 	set neighbors          	[ lsearch -exact $captionList {L1 Neighbors} ]
 	set session_up          [ lsearch -exact $captionList {L1 Sess. Up} ]
 	set init         	[ lsearch -exact $captionList {L1 Init State Count} ]

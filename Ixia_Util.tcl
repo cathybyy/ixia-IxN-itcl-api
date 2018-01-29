@@ -324,7 +324,7 @@ Deputs "standard mac:$value"
             set index [ string first $specmac $value ]
             set len [ string length $specmac ]
 			if { $huaweiFormat } {
-Deputs "huawei format..."
+#Deputs "huawei format..."
 				set newmac \
 				"[string range $specmac 0 1]-[string range $specmac 2 end]"
 			} else {
@@ -431,10 +431,10 @@ proc IsInt {value} {
     }
 }
 
-proc List2Str { value } {
+proc List2Str { value { sep " " } } {
     set retStr ""
     foreach item $value {
-	set retStr $retStr$item
+        set retStr $retStr$item$sep
     }
     return $retStr
 }
@@ -445,12 +445,15 @@ proc IsHex {value} {
     }
     set strLen  [ string length $value ]
     for { set index 0 } { $index < $strLen } { incr index } {
-        set checkChar   [ string index $value $index ]
-        if { [ regexp -nocase {[0-9a-f]} $checkChar ] } {
-            continue
-        } else {
-            return 0
-        }
+      set checkChar   [ string index $value $index ]
+      if { $checkChar == " " } {
+         continue
+      }
+      if { [ regexp -nocase {[0-9a-f]} $checkChar ] } {
+          continue
+      } else {
+          return 0
+      }
     }
     return 1
 }
@@ -571,9 +574,9 @@ proc IncrementIPAddr { IP prefixLen { num 1 } } {
     return [format %u 0x$A].[format %u 0x$B].[format %u 0x$C].[format %u 0x$D]
 }
 proc IncrementIPv6Addr { IP prefixLen { num 1 } } {
-Deputs "pfx len:$prefixLen IP:$IP num:$num"
+      Deputs "pfx len:$prefixLen IP:$IP num:$num"
 	
-	if { [ string first "::" $IP ] >= 0 } {
+      if { [ string first "::" $IP ] >= 0 } {
 		while { [ llength [ split $IP ":" ] ] < 8 } {
 			set colIndex [ string first "::" $IP ]
 			set IP [ string replace $IP \
@@ -587,17 +590,17 @@ Deputs "pfx len:$prefixLen IP:$IP num:$num"
 	}
 	set segList [ split $IP ":" ]
 	set seg [ expr $prefixLen / 16 - 1 ]
-Deputs "set:$seg"
+      Deputs "set:$seg"
 	set offset [ expr fmod($prefixLen,16) ]
-Deputs "offset:$offset"
+   Deputs "offset:$offset"
 	if { $offset  > 0 } {
 		incr seg
 	}
-Deputs "set:$seg"
+   Deputs "set:$seg"
 	set segValue [ lindex $segList $seg ]
-Deputs "segValue:$segValue"
+   Deputs "segValue:$segValue"
 	set segInt 	 [ format %i 0x$segValue ]
-Deputs "segInt:$segInt"
+   Deputs "segInt:$segInt"
 	if { $offset } {
 		incr segInt  [ expr round(pow(2, 16 - $offset)*$num )]
 	} else {
@@ -735,7 +738,7 @@ proc GetStandardReturnHeader {} {
 #    set statFormat "%10s : %10s"    
 #    set ret "[ format $statFormat "Status" "true" ]\n"
 #    set ret "$ret[ format $statFormat "Log" "" ]\n"
-	set ret "Status:true\nLog:\n"
+	set ret "Status : true\nLog:\n"
     return $ret
 }
 
@@ -763,7 +766,36 @@ proc GetPrefixV4Step { pfx { step 1 } } {
 	
 }
 
+proc DecToHex { value } {
+   set value [format "%x" $value]
+   if { [ expr [ string length $value ] % 2 ] != 0 } {
+      set value 0$value
+   }
+   return $value
+}
+
 proc IncrMacAddr { mac1 { mac2 00:00:00:00:00:01 } } {
+   if { [ string is integer $mac2 ] } {
+      set hexVal [ DecToHex $mac2 ]
+      if { [ expr [ string length $hexVal] % 2 ] != 0 } {
+      	set hexVal 0$hexVal
+      }
+      set len [ expr [ string length $hexVal] / 2 ]
+      set macStr ""
+      for { set i 0 } { $i < [ expr 6 - $len] } { incr i } {
+         set macStr ${macStr}00
+      }
+      set macStr $macStr$hexVal
+      
+      set mac2 ""
+      for { set i 0 } { $i < 12 } { incr i 2 } {
+         if { $mac2 != "" } {
+            set mac2 ${mac2}:[ string range $macStr $i [ expr $i + 1 ] ]
+         } else {
+            set mac2 [ string range $macStr $i [ expr $i + 1 ] ]
+         }
+      }
+   }
 	set mac1List [ split $mac1 ":" ]
 	set mac2List [ split $mac2 ":" ]
 	set macLen [ llength $mac1List ]
@@ -771,27 +803,27 @@ proc IncrMacAddr { mac1 { mac2 00:00:00:00:00:01 } } {
 	set macResult 	""
 	set flagAdd		0
 	for { set index $macLen } { $index > 0 } { incr index -1 } {
-Deputs "loop index:$index"
+      #Deputs "loop index:$index"
 		set eleIndex  	[ expr $index -1 ]
-Deputs "index:$eleIndex"
+      #Deputs "index:$eleIndex"
 		set mac1Ele 	[ lindex $mac1List $eleIndex ]
 		set mac2Ele		[ lindex $mac2List $eleIndex ]
-Deputs "mac element:$mac1Ele $mac2Ele"
+#Deputs "mac element:$mac1Ele $mac2Ele"
 		set macAdd 		[ format %x [ expr 0x$mac1Ele + 0x$mac2Ele ] ]
-Deputs "mac plus addr:$macAdd"
+#Deputs "mac plus addr:$macAdd"
 		if { $flagAdd } {
 			scan $macAdd %x macAddD
 			incr macAddD $flagAdd
 			set macAdd [ format %x $macAddD ]
 		}
-Deputs "incr flag:$macAdd"
+#Deputs "incr flag:$macAdd"
 		if { [ string length $macAdd ] > 2 } {
 			set flagAdd	1
 			set macAdd [ string range $macAdd [ expr [ string length $macAdd ] - 2 ] end ]
 		} else {
 			set flagAdd 0
 		}
-Deputs "flag add:$flagAdd"
+#Deputs "flag add:$flagAdd"
 		# set macTrans [ expr round(fmod($macAdd,16)) ]
 # Deputs "macTrans:$macTrans"
 		# set macTrans [ format %x $macTrans ]
@@ -799,9 +831,9 @@ Deputs "flag add:$flagAdd"
 		if { [ string length $macAdd ] == 1 } {
 			set macAdd "0$macAdd"
 		}
-Deputs "macTrans after add zero:$macAdd"
+#Deputs "macTrans after add zero:$macAdd"
 		set macResult ":$macAdd$macResult"
-Deputs "macResult:$macResult"
+#Deputs "macResult:$macResult"
 		}
 	return [ string range $macResult 1 end ]
 }
@@ -832,10 +864,36 @@ proc HexValue {value} {
 	}
 }
 
+proc HexToDec { value } {
+   set value [HexValue $value]
+   scan $value %x dec
+   return $dec
+}
+proc DecToHex { value } {
+   set value [format "%x" $value]
+   if { [ expr [ string length $value ] / 2 ] != 0 } {
+      set value 0$value
+   }
+   return $value
+}
 proc BinToDec {value} {
 	set binary_vlaue $value
 	binary scan [binary format B* [format %032s $binary_vlaue]] I1 decimal_value
 	return $decimal_value
+}
+
+proc IntToBin {value {len 8}} {
+	set bin ""
+	for { set exp [ expr $len - 1 ] } { $exp >= 0 } { incr exp -1 } {
+		set pow [ expr pow(2, $exp) ]
+		if { [expr $value - $pow ] >= 0 } {
+			set bin ${bin}1
+			set value [ expr $value - $pow ]
+		} else {
+			set bin ${bin}0
+		}
+	}
+	return $bin
 }
 
 proc PutsFormatInput { input { isgets 1 } } {
@@ -867,9 +925,18 @@ proc PutsFormatCp { args } {
 # Get key value from Huawei defined stats
 proc GetStatsFromReturn { stats key } {
 	set regStr "\{$key:(\\d+)\}"
+	set regStr2 "\{$key:(\\d+\.\\d+)\}"
+    set regStr3 "\{$key:(-\\d+\.\\d+)\}"
+    set regStr4 "\{$key:(-\\d+)\}"
 	Deputs "the reg key is: $key"
-	if { [ eval regexp $regStr {$stats} match val ] } {
+	if { [ eval regexp $regStr2 {$stats} match val ] } {
 		return $val
+	} elseif { [ eval regexp $regStr {$stats} match val ] } {
+		return $val
+    } elseif { [ eval regexp $regStr3 {$stats} match val ] } {
+       return $val
+    } elseif { [ eval regexp $regStr4 {$stats} match val ] } {
+       return $val
 	} else {
 		return ""
 	}
@@ -883,4 +950,17 @@ proc GetResultFromReturn { stats } {
 	} else {
 		return 0
 	}
+}
+
+proc GetFileFromDir { dir name } {
+    set old_dir [ pwd ]
+    cd $dir
+	foreach f [glob nocomplain "*.*"] {
+		if { [regexp ".*$name.*" $f ] } {
+            cd $old_dir
+			return $f
+		}
+	}
+    cd $old_dir
+    return ""
 }

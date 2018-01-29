@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.2
+# Release Version 1.3
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -10,67 +10,58 @@
 #		2. Add MulticastGroup class
 # Version 1.2
 #		3. Add join_group method
+# Version 1.3 
+#       4. Add MldOverPppoeHost
+#       5. Modify IgmpOverPppoeHost
 
 class IgmpHost {
     inherit RouterEmulationObject
     	
     constructor { port } {}
 	method reborn {} {
-    set tag "body IgmpHost::reborn [info script]"
-Deputs "----- TAG: $tag -----"
-		if { [ catch {
+        set tag "body IgmpHost::reborn [info script]"
+        Deputs "----- TAG: $tag -----"
+            if { [ catch {
 			set hPort   [ $portObj cget -handle ]
 		} ] } {
 			error "$errNumber(1) Port Object in DhcpHost ctor"
 		}
 
 		#-- enable igmp emulation
+        Deputs "hPort: $hPort"
 		ixNet setA $hPort/protocols/igmp -enabled True
 		ixNet commit
+       
 
 		set handle [ ixNet add $hPort/protocols/igmp host ]
-		set handle [ ixNet remapIds $handle ]
-	
-		ixNet setA $handle \
-			-name $this \
-			-enabled True
-		ixNet commit
+        catch {
+            ixNet setA $handle \
+			    -enabled True
+		    ixNet commit
+        }
 		
-		# set interface [ ixNet getL $hPort interface ]
-		# if { [ llength $interface ] == 0 } {
-			# set interface [ ixNet add $hPort interface ]
-			# ixNet add $interface ipv4
-			# ixNet commit
-			# set interface [ ixNet remapIds $interface ]
-			# ixNet setM $interface \
-				# -enabled True
-			# ixNet commit
-		# }
-		# ixNet setA $handle \
-			# -interfaceType "Protocol Interface" \
-			# -interfaces [ lindex $interface 0 ]
-		# ixNet commit
+        set handle [ ixNet remapIds $handle ]
+        Deputs "handle:$handle"
 		
 		set protocol igmp
-
 	}
     method config { args } {}
 	method unconfig {} {
 		set tag "body IgmpHost::unconfig [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		set interface [ list ]
 		set group_list	[ list ]
 		array set group_handle [list]
 		catch {
-Deputs Step10		
-			foreach hIgmp $handle {
+                Deputs Step10		
+                foreach hIgmp $handle {
 				ixNet remove $hIgmp
 			}
 			ixNet commit
 		}
 		set handle ""
 		# catch { 
-# Deputs Step20
+        # Deputs Step20
 			# delete object $this.host 
 		# }
 	}
@@ -91,12 +82,11 @@ Deputs Step10
 	public variable view
 }
 
-body IgmpHost::constructor { port } {
-    
+body IgmpHost::constructor { port } {  
     global errNumber
     
     set tag "body IgmpHost::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
     set portObj [ GetObject $port ]
 
@@ -111,7 +101,7 @@ Deputs "----- TAG: $tag -----"
 	set handle ""
 	set view {::ixNet::OBJ-/statistics/view:"IGMP Aggregated Statistics"}
     # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
-Deputs "view:$view"
+    Deputs "view:$view"
 
 	reborn
 }
@@ -120,12 +110,12 @@ body IgmpHost::config { args } {
     global errorInfo
     global errNumber
     set tag "body IgmpHost::config [info script]"
-Deputs "----- TAG: $tag -----"
+	Deputs "----- TAG: $tag -----"
 	if { $handle == "" } {
 		reborn
 	}
-#param collection
-Deputs "Args:$args "
+	#param collection
+	Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
@@ -220,16 +210,19 @@ Deputs "Args:$args "
             }
 		}
     }
-		
-	if { [ GetObject $this.host ] == "" } {
-		Host $this.host $portObj
-	}
-	eval {$this.host} config $args
-		
-	ixNet setA $handle \
-		-interfaceType "Protocol Interface" \
-		-interfaces [ $this.host cget -handle ]
-	ixNet commit
+	
+    if {[ixNet getA $handle -interfaces] == "" } {
+    	
+        if { [ GetObject $this.host ] == "" } {
+            Host $this.host $portObj
+        }
+        eval {$this.host} config $args
+            
+        ixNet setA $handle \
+            -interfaceType "Protocol Interface" \
+            -interfaces [ $this.host cget -handle ]
+        ixNet commit
+    }
 
 	foreach h $handle {
 		if { [ info exists version ] } {
@@ -243,6 +236,12 @@ Deputs "Args:$args "
 				v3 {
 					set ixversion igmpv3
 				}
+                version1 {
+                    set ixversion version1
+                }
+                version2 {
+                    set ixversion version2
+                }
 			}
 			ixNet setA $h -version $ixversion
 		}
@@ -681,157 +680,6 @@ Deputs "set ip address...$value"
 	return [ GetStandardReturnHeader ]
 }
 
-class IgmpOverDhcpHost {
-	inherit IgmpHost
-	public variable Dhcp
-	
-	constructor { dhcp } {
-		set Dhcp $dhcp
-		set portObj [ $Dhcp  cget -portObj ]
-
-		chain $portObj
-		
-	} {
-		set tag "body IgmpOverDhcpHost::ctor [info script]"
-Deputs "----- TAG: $tag -----"
-		reborn
-	}
-		
-	method reborn {} {}
-	method config { args } {}
-	method start {} {}
-	method stop {} {}
-}
-body IgmpOverDhcpHost::reborn {} {
-    set tag "body IgmpOverDhcpHost::reborn [info script]"
-Deputs "----- TAG: $tag -----"
-	
-		
-	set interface [ list ]
-	set hDhcp [ $Dhcp cget -handle ]
-
-Deputs "hDhcp:$hDhcp"
-	set count [ ixNet getA $hDhcp/dhcpRange -count ]
-Deputs "count:$count"
-	for { set index 1 } { $index <= $count } { incr index } {
-Deputs "hPort:$hPort"	
-		set host [ ixNet add $hPort/protocols/igmp host ]
-Deputs "IgmpoDhcp host: $host index:$index"		
-		ixNet setM $host \
-			-interfaceType DHCP \
-			-interfaceIndex $index \
-			-enabled True 
-		ixNet commit
-		lappend handle [ixNet remapIds $host]
-		ixNet setA $host -interfaces $hDhcp
-		ixNet commit
-	}
-Deputs "handle:$handle"	
-}
-body IgmpOverDhcpHost::config { args } {
-    set tag "body IgmpHost::config [info script]"
-Deputs "----- TAG: $tag -----"
-
-# Deputs "handle:$handle"	
-	if { [ llength $handle ] == 0 } {
-		reborn
-	}
-	
-	eval chain $args
-	
-	foreach { key value } $args {
-        set key [string tolower $key]
-        switch -exact -- $key {
-            -group {
-            	set groupList $value
-            }
-            -rate {
-            	set rate $value
-            }
-        }
-    }
-
-	if { [ info exists rate ] } {
-		ixNet setMultiAttrs $hPort/protocols/igmp \
-			-numberOfGroups $rate \
-			-timePeriod 1000
-		ixNet commit
-	}
-	
-	if { [ info exists groupList ] } {
-		foreach group $groupList {
-	Deputs Step10
-			if { [ $group isa MulticastGroup ] == 0 } {
-				return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
-			}
-	Deputs Step20
-			set grpIndex [ lsearch $group_list $group ]
-			if { $grpIndex >= 0 } {
-	Deputs Step30
-				foreach hIgmp $handle {
-
-					set hGroup	$group_handle($group,$hIgmp)
-					ixNet setA $hGroup -enabled True
-					ixNet commit
-				}
-			} else {
-	Deputs Step40
-				set filter_mode [ $group cget -filter_mode ]
-				set group_ip [ $group cget -group_ip ]
-				set group_num [ $group cget -group_num ]
-				set group_step [ $group cget -group_step ]
-				set group_modbit [ $group cget -group_modbit ]
-				set source_ip [ $group cget -source_ip ]
-				set source_num [ $group cget -source_num ]
-				set source_step [ $group cget -source_step ]
-				set source_modbit [ $group cget -source_modbit ]
-Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
-Deputs Step45
-Deputs "handle:$handle"	
-				foreach hIgmp $handle {
-					set hGroup [ ixNet add $hIgmp group ]
-Deputs "hGroup:$hGroup"					
-					set incrStep [ GetPrefixV4Step $group_modbit $group_step ]
-Deputs "incrStep:$incrStep"					
-					ixNet setM $hGroup \
-						-enabled 		True \
-						-groupCount 	$group_num \
-						-groupFrom 		$group_ip \
-						-incrementStep 	$incrStep \
-						-sourceMode 	$filter_mode
-						
-					ixNet commit
-Deputs Step50			
-Deputs "group handle:$hGroup"
-Deputs "group handle array names: [ array names group_handle ]"
-					set group_handle($group,$hIgmp) $hGroup
-		Deputs Step60
-					lappend group_list $group
-		Deputs "group handle names:[ array names group_handle ]"
-		Deputs "group list:$group_list"
-				}			
-			}
-		}
-	}
-
-	return [ GetStandardReturnHeader ]
-	
-}
-body IgmpOverDhcpHost::start {} {
-    set tag "body IgmpOverDhcpHost::start [info script]"
-Deputs "----- TAG: $tag -----"
-	ixNet exec start $hPort/protocols/igmp
-	return [ GetStandardReturnHeader ]
-
-}
-body IgmpOverDhcpHost::stop {} {
-    set tag "body IgmpOverDhcpHost::stop [info script]"
-Deputs "----- TAG: $tag -----"
-	ixNet exec stop $hPort/protocols/igmp
-	return [ GetStandardReturnHeader ]
-
-}
-
 class MldHost {
     inherit IgmpHost
     	
@@ -841,7 +689,7 @@ class MldHost {
 	method join_group { args } {}
 	method reborn {} {
     set tag "body MldHost::reborn [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		if { [ catch {
 			set hPort   [ $portObj cget -handle ]
 		} ] } {
@@ -853,17 +701,18 @@ Deputs "----- TAG: $tag -----"
 		ixNet commit
 
 		set handle [ ixNet add $hPort/protocols/mld host ]
-Deputs "handle:$handle"		
+        ixNet commit
 		set handle [ ixNet remapIds $handle ]
-	
-		ixNet setA $handle \
+        Deputs "handle:$handle, this:$this"	
+        catch {
+            ixNet setA $handle \
 			-name $this \
 			-enabled True
 		ixNet commit
-
+        }
 		
+     
 		set protocol mld
-
 	}
 	method config { args } {
 		eval chain $args -ip_version ipv6 
@@ -933,6 +782,18 @@ Deputs "----- TAG: $tag -----"
 						-sourceMode $filter_mode
 					ixNet commit
 					set hGroup [ ixNet remapIds $hGroup ]
+                    
+                    Deputs "sourceip: $source_ip"
+                    if { $source_ip != "0.0.0.0" } {
+        Deputs Step48
+                        set hSource [ ixNet add $hGroup source ]
+        Deputs $hSource
+                        ixNet setM $hSource \
+                            -sourceRangeCount $source_num \
+			                -sourceRangeStart $source_ip
+                        ixNet commit
+                        set hSource [ixNet remapIds $hSource]
+                    }
 		Deputs Step50			
 		Deputs "group handle:$hGroup"
 		Deputs "group handle array names: [ array names group_handle ]"
@@ -952,5 +813,456 @@ Deputs "----- TAG: $tag -----"
 	}
 
 	start
+	return [ GetStandardReturnHeader ]
+}
+class IgmpOverDhcpHost {
+	inherit IgmpHost
+	public variable Dhcp
+	
+	constructor { dhcp } { chain [ $dhcp  cget -portObj ] } {
+		set tag "body IgmpOverDhcpHost::ctor [info script]"
+        Deputs "----- TAG: $tag -----"
+		set Dhcp $dhcp
+        Deputs "Dhcp: $Dhcp"
+        born
+	}
+		
+	method born {} {}
+	method config { args } {}
+	method start {} {}
+	method stop {} {}
+}
+body IgmpOverDhcpHost::born {} {
+    set tag "body IgmpOverDhcpHost::born [info script]"
+    Deputs "----- TAG: $tag -----"
+			
+	set interface [ list ]
+	set hDhcp [ $Dhcp cget -handle ]
+
+    Deputs "hDhcp:$hDhcp"
+	set count [ ixNet getA $hDhcp/dhcpRange -count ]
+    Deputs "count:$count"
+	for { set index 1 } { $index <= $count } { incr index } {
+        Deputs "hPort:$hPort"
+        set host [lindex $handle [expr $index - 1]]
+        if { $host == "" } {
+            set host [ ixNet add $hPort/protocols/igmp host ]
+        }
+        Deputs "IgmpOverDhcpHost host: $host index:$index"		
+		ixNet setM $host \
+			-interfaceType DHCP \
+			-interfaceIndex $index \
+			-enabled True 
+		ixNet commit
+        set host [ixNet remapIds $host]
+        if { [lsearch $handle $host] == -1} {
+            lappend handle $host
+        }
+		ixNet setA $host -interfaces $hDhcp
+		ixNet commit
+	}
+    Deputs "handle:$handle"	
+}
+body IgmpOverDhcpHost::config { args } {
+    set tag "body IgmpOverDhcpHost::config [info script]"
+    Deputs "----- TAG: $tag -----"
+    
+    # Deputs "handle:$handle"	
+	if { [ llength $handle ] == 0 } {
+		born
+	}
+	
+	eval chain $args
+	
+	foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -group {
+            	set groupList $value
+            }
+            -rate {
+            	set rate $value
+            }
+        }
+    }
+
+	if { [ info exists rate ] } {
+		ixNet setMultiAttrs $hPort/protocols/igmp \
+			-numberOfGroups $rate \
+			-timePeriod 1000
+		ixNet commit
+	}
+	
+	if { [ info exists groupList ] } {
+		foreach group $groupList {
+            Deputs Step10
+			if { [ $group isa MulticastGroup ] == 0 } {
+				return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
+			}
+            Deputs Step20
+			set grpIndex [ lsearch $group_list $group ]
+			if { $grpIndex >= 0 } {
+                Deputs Step30
+				foreach hIgmp $handle {
+					set hGroup	$group_handle($group,$hIgmp)
+					ixNet setA $hGroup -enabled True
+					ixNet commit
+				}
+			} else {
+                Deputs Step40
+				set filter_mode [ $group cget -filter_mode ]
+				set group_ip [ $group cget -group_ip ]
+				set group_num [ $group cget -group_num ]
+				set group_step [ $group cget -group_step ]
+				set group_modbit [ $group cget -group_modbit ]
+				set source_ip [ $group cget -source_ip ]
+				set source_num [ $group cget -source_num ]
+				set source_step [ $group cget -source_step ]
+				set source_modbit [ $group cget -source_modbit ]
+                Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
+                Deputs Step45
+                Deputs "handle:$handle"	
+				foreach hIgmp $handle {
+					set hGroup [ ixNet add $hIgmp group ]
+                    Deputs "hGroup:$hGroup"					
+					set incrStep [ GetPrefixV4Step $group_modbit $group_step ]
+                    Deputs "incrStep:$incrStep"					
+					ixNet setM $hGroup \
+						-enabled 		True \
+						-groupCount 	$group_num \
+						-groupFrom 		$group_ip \
+						-incrementStep 	$incrStep \
+						-sourceMode 	$filter_mode
+						
+					ixNet commit
+                    Deputs Step50			
+                    Deputs "group handle:$hGroup"
+                    Deputs "group handle array names: [ array names group_handle ]"
+					set group_handle($group,$hIgmp) $hGroup
+                    Deputs Step60
+					lappend group_list $group
+                    Deputs "group handle names:[ array names group_handle ]"
+                    Deputs "group list:$group_list"
+				}			
+			}
+		}
+	}
+
+	return [ GetStandardReturnHeader ]
+	
+}
+body IgmpOverDhcpHost::start {} {
+    set tag "body IgmpOverDhcpHost::start [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec start $hPort/protocols/igmp
+	return [ GetStandardReturnHeader ]
+}
+body IgmpOverDhcpHost::stop {} {
+    set tag "body IgmpOverDhcpHost::stop [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec stop $hPort/protocols/igmp
+	return [ GetStandardReturnHeader ]
+}
+
+
+class IgmpOverPppoeHost {
+	inherit IgmpHost
+	public variable Pppoe
+	
+	constructor { pppoe } { 
+        set Pppoe $pppoe
+        chain [ $pppoe  cget -portObj ] } {
+      
+		set tag "body IgmpOverPppoeHost::ctor [info script]"      
+        Deputs "----- TAG: $tag -----"   
+       
+	}
+		
+	method reborn {} {}
+	method config { args } {}
+	method start {} {}
+	method stop {} {}
+}
+body IgmpOverPppoeHost::reborn {} {
+    set tag "body IgmpOverPppoeHost::reborn [info script]"
+    Deputs "----- TAG: $tag -----"
+	
+    chain    
+	set interface [ list ]
+	set hPppoe [ $Pppoe cget -handle ]
+    ixNet setM $handle \
+			-interfaceType PPP \
+			-interfaces $hPppoe  \
+			-enabled True 
+    ixNet commit
+
+  
+    Deputs "handle:$handle"	
+}
+body IgmpOverPppoeHost::config { args } {
+    set tag "body IgmpOverPppoeHost::config [info script]"
+    Deputs "----- TAG: $tag -----"
+    
+    # Deputs "handle:$handle"	
+	if { $handle == "" } {
+		reborn
+       
+	}
+	
+	eval chain $args
+	
+	foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -group {
+            	set groupList $value
+            }
+            -rate {
+            	set rate $value
+            }
+        }
+    }
+
+	if { [ info exists rate ] } {
+		ixNet setMultiAttrs $hPort/protocols/igmp \
+			-numberOfGroups $rate \
+			-timePeriod 1000
+		ixNet commit
+	}
+	
+	if { [ info exists groupList ] } {
+		foreach group $groupList {
+            Deputs Step10
+			if { [ $group isa MulticastGroup ] == 0 } {
+				return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
+			}
+            Deputs Step20
+			set grpIndex [ lsearch $group_list $group ]
+			if { $grpIndex >= 0 } {
+                Deputs Step30
+				foreach hIgmp $handle {
+					set hGroup	$group_handle($group,$hIgmp)
+					ixNet setA $hGroup -enabled True
+					ixNet commit
+				}
+			} else {
+                Deputs Step40
+				set filter_mode [ $group cget -filter_mode ]
+				set group_ip [ $group cget -group_ip ]
+				set group_num [ $group cget -group_num ]
+				set group_step [ $group cget -group_step ]
+				set group_modbit [ $group cget -group_modbit ]
+				set source_ip [ $group cget -source_ip ]
+				set source_num [ $group cget -source_num ]
+				set source_step [ $group cget -source_step ]
+				set source_modbit [ $group cget -source_modbit ]
+                Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
+                Deputs Step45
+                Deputs "handle:$handle"	
+				foreach hIgmp $handle {
+					set hGroup [ ixNet add $hIgmp group ]
+                    Deputs "hGroup:$hGroup"					
+					set incrStep [ GetPrefixV4Step $group_modbit $group_step ]
+                    Deputs "incrStep:$incrStep"					
+					ixNet setM $hGroup \
+						-enabled 		True \
+						-groupCount 	$group_num \
+						-groupFrom 		$group_ip \
+						-incrementStep 	$incrStep \
+						-sourceMode 	$filter_mode
+						
+					ixNet commit
+                    set hGroup [ ixNet remapIds $hGroup ]
+                    Deputs "sourceip: $source_ip"
+                    if { $source_ip != "0.0.0.0" } {
+        Deputs Step48
+                        set hSource [ ixNet add $hGroup source ]
+        Deputs $hSource
+                        ixNet setM $hSource \
+                            -sourceRangeCount $source_num \
+			                -sourceRangeStart $source_ip
+                        ixNet commit
+                        set hSource [ixNet remapIds $hSource]
+                    }
+                    Deputs Step50			
+                    Deputs "group handle:$hGroup"
+                    Deputs "group handle array names: [ array names group_handle ]"
+					set group_handle($group,$hIgmp) $hGroup
+                    Deputs Step60
+					lappend group_list $group
+                    Deputs "group handle names:[ array names group_handle ]"
+                    Deputs "group list:$group_list"
+				}			
+			}
+		}
+	}
+
+	return [ GetStandardReturnHeader ]
+	
+}
+body IgmpOverPppoeHost::start {} {
+    set tag "body IgmpOverPppoeHost::start [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec start $hPort/protocols/igmp
+	return [ GetStandardReturnHeader ]
+}
+body IgmpOverPppoeHost::stop {} {
+    set tag "body IgmpOverPppoeHost::stop [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec stop $hPort/protocols/igmp
+	return [ GetStandardReturnHeader ]
+}
+
+class MldOverPppoeHost {
+	inherit MldHost
+	public variable Pppoe
+	
+	constructor { pppoe } { 
+        set Pppoe $pppoe
+        chain [ $pppoe  cget -portObj ] } {
+      
+		set tag "body MldIgmpOverPppoeHost::ctor [info script]"      
+        Deputs "----- TAG: $tag -----"
+		        
+    
+       
+	}
+		
+	method reborn {} {}
+	method config { args } {}
+	method start {} {}
+	method stop {} {}
+}
+body MldOverPppoeHost::reborn {} {
+    set tag "body MldOverPppoeHost::reborn [info script]"
+    Deputs "----- TAG: $tag -----"
+	
+    chain    
+	set interface [ list ]
+	set hPppoe [ $Pppoe cget -handle ]
+    ixNet setM $handle \
+			-interfaceType PPP \
+			-interfaces $hPppoe  \
+			-enabled True 
+    ixNet commit
+
+  
+    Deputs "handle:$handle"	
+}
+body MldOverPppoeHost::config { args } {
+    set tag "body MldOverPppoeHost::config [info script]"
+    Deputs "----- TAG: $tag -----"
+    
+    # Deputs "handle:$handle"	
+	if { $handle == "" } {
+		reborn
+        
+	}
+	
+	eval chain $args
+	
+	foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -group {
+            	set groupList $value
+            }
+            -rate {
+            	set rate $value
+            }
+        }
+    }
+
+	if { [ info exists rate ] } {
+		ixNet setMultiAttrs $hPort/protocols/mld \
+			-numberOfGroups $rate \
+			-timePeriod 1000
+		ixNet commit
+	}
+	
+	if { [ info exists groupList ] } {
+		foreach group $groupList {
+            Deputs Step10
+			if { [ $group isa MulticastGroup ] == 0 } {
+				return [ GetErrorReturnHeader "Invalid MultcastGroup object... $group" ]
+			}
+            Deputs Step20
+			set grpIndex [ lsearch $group_list $group ]
+			if { $grpIndex >= 0 } {
+                Deputs Step30
+				foreach hIgmp $handle {
+					set hGroup	$group_handle($group,$hIgmp)
+					ixNet setA $hGroup -enabled True
+					ixNet commit
+				}
+			} else {
+                Deputs Step40
+				set filter_mode [ $group cget -filter_mode ]
+				set group_ip [ $group cget -group_ip ]
+				set group_num [ $group cget -group_num ]
+				set group_step [ $group cget -group_step ]
+				set group_modbit [ $group cget -group_modbit ]
+				set source_ip [ $group cget -source_ip ]
+				set source_num [ $group cget -source_num ]
+				set source_step [ $group cget -source_step ]
+				set source_modbit [ $group cget -source_modbit ]
+                Deputs "=group prop= filter_mode:$filter_mode group_ip:$group_ip group_num:$group_num group_step:$group_step group_modbit:$group_modbit source_ip:$source_ip source_num:$source_num source_step:$source_step source_modbit:$source_modbit"
+                Deputs Step45
+                Deputs "handle:$handle"	
+				foreach hMld $handle {
+					set hGroup [ ixNet add $hMld groupRange ]
+                    Deputs "hGroup:$hGroup"					
+					set incrStep [ GetPrefixV4Step $group_modbit $group_step ]
+                    Deputs "incrStep:$incrStep"					
+					ixNet setM $hGroup \
+						-enabled 		True \
+						-groupCount 	$group_num \
+						-groupFrom 		$group_ip \
+						-incrementStep 	$incrStep \
+						-sourceMode 	$filter_mode
+						
+					ixNet commit
+                    set hGroup [ ixNet remapIds $hGroup ]
+                    Deputs "sourceip: $source_ip"
+                    if { $source_ip != "0.0.0.0" } {
+        Deputs Step48
+                        set hSource [ ixNet add $hGroup sourceRange ]
+        Deputs $hSource
+                        ixNet setM $hSource \
+                            -count $source_num \
+			                -ipFrom $source_ip
+                        ixNet commit
+                        set hSource [ixNet remapIds $hSource]
+                    }
+                    Deputs Step50			
+                    Deputs "group handle:$hGroup"
+                    Deputs "group handle array names: [ array names group_handle ]"
+					set group_handle($group,$hMld) $hGroup
+                    Deputs Step60
+					lappend group_list $group
+                    Deputs "group handle names:[ array names group_handle ]"
+                    Deputs "group list:$group_list"
+                    $group configure -handle $hGroup
+					$group configure -portObj $portObj
+					$group configure -hPort $hPort
+					$group configure -protocol "mld"
+				}			
+			}
+		}
+	}
+
+	return [ GetStandardReturnHeader ]
+	
+}
+body MldOverPppoeHost::start {} {
+    set tag "body MldOverPppoeHost::start [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec start $hPort/protocols/mld
+	return [ GetStandardReturnHeader ]
+}
+body MldOverPppoeHost::stop {} {
+    set tag "body MldOverPppoeHost::stop [info script]"
+    Deputs "----- TAG: $tag -----"
+	ixNet exec stop $hPort/protocols/mld
 	return [ GetStandardReturnHeader ]
 }

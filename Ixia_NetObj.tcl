@@ -96,7 +96,7 @@ class ProtocolStackObject {
     
     method reborn { { onStack null } } {
 		set tag "body ProtocolStackObject::reborn [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		if { [ info exists hPort ] == 0 } {
 			if { [ catch {
 				set hPort   [ $portObj cget -handle ]
@@ -106,7 +106,7 @@ Deputs "----- TAG: $tag -----"
 		}
 		
 		if { $onStack == "null" } {
-Deputs "new ethernet stack"
+            Deputs "new ethernet stack"
 			#-- add ethernet stack
 			set sg_ethernet [ixNet add $hPort/protocolStack ethernet]
 			ixNet setMultiAttrs $sg_ethernet \
@@ -122,14 +122,14 @@ Deputs "new ethernet stack"
 		global errorInfo
 		global errNumber
 		set tag "body ProtocolStackObject::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
         set portObj [ GetObject $port ]
         if { [ catch {
         	set hPort   [ $portObj cget -handle ]
         } ] } {
-        	error "$errNumber(1) Port Object in DhcpHost ctor"
+        	error "$errNumber(1) Port Object in ProtocolStackObject ctor"
         }
-Deputs "onStack:$onStack"        
+        Deputs "onStack:$onStack"        
 		if { $onStack != "null" } {
 			reborn $onStack
 		} else {
@@ -145,35 +145,33 @@ body ProtocolStackObject::config { args } {
     global errorInfo
     global errNumber
     set tag "body ProtocolStackObject::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
 			-mac_addr {
-			set trans [ MacTrans $value ]
-			if { [ IsMacAddress $trans ] } {
-				set mac_addr $trans
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}                
-			
+                set trans [ MacTrans $value ]
+                if { [ IsMacAddress $trans ] } {
+                    set mac_addr $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }                
 			}
 			-mac_addr_step {
-			set trans [ MacTrans $value ]
-			if { [ IsMacAddress $trans ] } {
-				set mac_addr_step $trans
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}                
-			
+                set trans [ MacTrans $value ]
+                if { [ IsMacAddress $trans ] } {
+                    set mac_addr_step $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }                
 			}
 			-inner_vlan_enable {
-			set trans [ BoolTrans $value ]
-			if { $trans == "1" || $trans == "0" } {
-				set inner_vlan_enable $trans
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}
+                set trans [ BoolTrans $value ]
+                if { $trans == "1" || $trans == "0" } {
+                    set inner_vlan_enable $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
 			}
 			-vlan_id2 -
 			-inner_vlan_id {
@@ -182,6 +180,7 @@ Deputs "----- TAG: $tag -----"
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set inner_vlan_enable 1
 			}
 			-vlan_id2_step -
 			-inner_vlan_step {
@@ -190,6 +189,7 @@ Deputs "----- TAG: $tag -----"
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set inner_vlan_enable 1
 			}
 			-inner_vlan_repeat_count {
 				if { [ string is integer $value ] && ( $value >= 0 ) } {
@@ -198,6 +198,7 @@ Deputs "----- TAG: $tag -----"
 					error "$errNumber(1) key:$key value:$value"
 				}
 			}
+            -vlan2_per_port -
 			-vlan_id2_num -
 			-inner_vlan_num {
 				if { [ string is integer $value ] && ( $value >= 0 ) } {
@@ -205,22 +206,23 @@ Deputs "----- TAG: $tag -----"
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set inner_vlan_enable 1                
 			}
 			-inner_vlan_priority {
-			if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
-				set inner_vlan_priority $value
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
+                    set inner_vlan_priority $value
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
 			}
 			-vlan_presnet -
 			-outer_vlan_enable {
-			set trans [ BoolTrans $value ]
-			if { $trans == "1" || $trans == "0" } {
-				set outer_vlan_enable $trans
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}
+                set trans [ BoolTrans $value ]
+                if { $trans == "1" || $trans == "0" } {
+                    set outer_vlan_enable $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
 			}
 			-vlan_id1 -
 			-vlan_id -
@@ -230,6 +232,7 @@ Deputs "----- TAG: $tag -----"
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set outer_vlan_enable 1
 			}
 			-vlan_id_step -
 			-vlan_id1_step -
@@ -239,22 +242,25 @@ Deputs "----- TAG: $tag -----"
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set outer_vlan_enable 1
 			}
 			-vlan_id1_num -
 			-vlan_num -
+            -vlan1_per_port -
 			-outer_vlan_num {
 				if { [ string is integer $value ] && ( $value >= 0 ) } {
 					set outer_vlan_num $value
 				} else {
 					error "$errNumber(1) key:$key value:$value"
 				}
+                set outer_vlan_enable 1
 			}
 			-outer_vlan_priority {
-			if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
-				set outer_vlan_priority $value
-			} else {
-				error "$errNumber(1) key:$key value:$value"
-			}
+				if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
+					set outer_vlan_priority $value
+				} else {
+					error "$errNumber(1) key:$key value:$value"
+				}
 			}    	
 			-outer_vlan_repeat_count {
 				if { [ string is integer $value ] && ( $value >= 0 ) } {
@@ -353,10 +359,9 @@ Deputs "outer_vlan_step:$outer_vlan_step"
     set inner_vlan ""
 	set version [ixNet getVersion]
 	Deputs "The ixNetwork version is: $version"
-
+    set verval [string match 6.0* $version]
     if { [ info exists inner_vlan_enable ] } {
-Deputs "inner vlan enabled..."
-	    set verval [string match 6.0* $version]
+        Deputs "inner vlan enabled..."
 	    if {$verval == 1} {
 		    set inner_vlan [ixNet add $range vlanRange]
 	    } else {
@@ -369,7 +374,6 @@ Deputs "inner vlan enabled..."
 	    } else {
 		    ixNet setA $inner_vlan -enabled $inner_vlan_enable 
 	    }
-		
     }
     
     if { [ info exists inner_vlan_id ] } {
@@ -419,7 +423,6 @@ Deputs "inner vlan enabled..."
 }
 
 class RouterEmulationObject {
-	
 	inherit EmulationObject
 	#-- handle/interface
 	public variable interface
@@ -433,21 +436,21 @@ class RouterEmulationObject {
 	
 	method start {} {
 		set tag "body RouterEmulationObject::start [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		ixNet exec start $hPort/protocols/$protocol
 		return [ GetStandardReturnHeader ]
 	}
 	
 	method stop {} {
 		set tag "body BgpSession::start [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		ixNet exec stop $hPort/protocols/$protocol
 		return [ GetStandardReturnHeader ]
 	}
 	
 	method flapping_route { args } {
 		set tag "body RouterEmulationObject::flapping_route [info script]"
-	Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		
 		global loginInfo
 		set a2w 10
@@ -499,17 +502,17 @@ Deputs "----- TAG: $tag -----"
 				lappend hFlapList $hFlap
 			}
 			
-Deputs "hFlapList:$hFlapList"
+            Deputs "hFlapList:$hFlapList"
 			set id [ thread::create { 
-				proc runFlap { hFlapList } {
+				proc runFlap { hFlapList w2a a2w } {
 					while { 1 } {
-puts "withdraw..."					
+                        puts "withdraw..."					
 						foreach handle $hFlapList {
 							ixNet setA $handle -enabled False
 						}
 						ixNet commit
 						after $w2a
-puts "advertise..."
+                        puts "advertise..."
 						foreach handle $hFlapList {
 							ixNet setA $handle -enabled True
 						}
@@ -518,7 +521,6 @@ puts "advertise..."
 					}
 				}
 				proc init { tclServer tclPort version } {
-					
 					package req IxTclNetwork
 					ixNet connect $tclServer \
 						-port $tclPort \
@@ -526,40 +528,41 @@ puts "advertise..."
 				}
 				thread::wait
 			} ]		
-Deputs "[ thread::names ]"			
+            Deputs "[ thread::names ]"			
 			lappend flappingProcessId $id
 			
 			global currDir
-			global server
-			global serverPort
+			global remote_server
+			global remote_serverPort
 			global ixN_tcl_v
+			global ixN_lib
 			
-Deputs "version: $ixN_tcl_v"			
-Deputs "server port:$serverPort"			
-Deputs "server:$server"			
+            Deputs "version: $ixN_tcl_v"			
+            Deputs "server port:$remote_serverPort"			
+            Deputs "server:$remote_server"			
 
-			set tclLib [file dirname [info script]]/IxNetwork
-Deputs "tcl lib:$tclLib"
+			set tclLib $ixN_lib
+            Deputs "tcl lib:$tclLib"
 
 			set result \
 			[ thread::send $id \
 			[ list lappend auto_path $tclLib ] ]
-Deputs "result:$result"
+            Deputs "result:$result"
+			
+			#set result \
+			#[ thread::send $id \
+			#[ list source "$currDir/ixianet.tcl" ] ]
+            #Deputs "result:$result"
 			
 			set result \
 			[ thread::send $id \
-			[ list source "$currDir/ixianet.tcl" ] ]
-Deputs "result:$result"
-			
-			set result \
-			[ thread::send $id \
-			[ list init $server $serverPort $ixN_tcl_v ] ]
-Deputs "result:$result"
+			[ list init $remote_server $remote_serverPort $ixN_tcl_v ] ]
+            Deputs "init result:$result"
 
 			set result \
 			[ thread::send -async $id \
-			[ list runFlap $hFlapList ] ]
-Deputs "result:$result"
+			[ list runFlap $hFlapList $w2a $a2w ] ]
+            Deputs "runFlap result:$result"
 
 		}	
 		return [ GetStandardReturnHeader ]
@@ -567,7 +570,7 @@ Deputs "result:$result"
 	}
 	method flappingRouteForTimes { $routeBlockList $a2w $w2a $times } {
 		set tag "body RouterEmulationObject::flappingRouteAsync [info script]"
-	Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		
 		for { set index 0 } { $index < $times } { incr index } {
 			foreach rb $routeBlockList {
@@ -586,7 +589,7 @@ Deputs "result:$result"
 	}
 	method stop_flapping_route {} {
 		set tag "body RouterEmulationObject::flapping_route [info script]"
-	Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
     	foreach pid $flappingProcessId {
 			thread::release $pid
 		}
@@ -622,10 +625,10 @@ body RouteBlock::config { args } {
     global errorInfo
     global errNumber
     set tag "body RouteBlock::config [info script]"
-Deputs "----- TAG: $tag -----"
-	
-#param collection
-Deputs "Args:$args "
+    Deputs "----- TAG: $tag -----"
+        
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {

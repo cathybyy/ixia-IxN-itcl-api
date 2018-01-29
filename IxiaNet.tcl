@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.66
+set releaseVersion 4.69
 #===============================================================================
 # Change made
 # ==2011==
@@ -262,6 +262,12 @@ set releaseVersion 4.66
 #		121. Add support for NGPF
 # Version 4.66
 #		122. Release on May 14th
+# Version 4.66
+#		123. Add SearchMinFrameSizeByLoad on July 11th
+# Version 4.67
+#		124. Release on Aug. 28th
+# Version 4.68
+#       125. Add Rfc3918 JoinLeaveDelay
 
 proc GetEnvTcl { product } {
    
@@ -269,9 +275,14 @@ proc GetEnvTcl { product } {
    set versionKey     [ registry keys $productKey ]
    set latestKey      [ lindex $versionKey end ]
 
-   if { $latestKey == "Multiversion" } {
-      set latestKey   [ lindex $versionKey [ expr [ llength $versionKey ] - 2 ] ]
-   }
+    if { $latestKey == "Multiversion" } {
+        set latestKey   [ lindex $versionKey [ expr [ llength $versionKey ] - 2 ] ]
+        if { $latestKey == "InstallInfo" } {
+            set latestKey   [ lindex $versionKey [ expr [ llength $versionKey ] - 3 ] ]
+        }
+    } elseif { $latestKey == "InstallInfo" } {
+        set latestKey   [ lindex $versionKey [ expr [ llength $versionKey ] - 2 ] ]
+    }
    set installInfo    [ append productKey \\ $latestKey \\ InstallInfo ]            
    return             [ registry get $installInfo  HOMEDIR ]
 
@@ -282,6 +293,8 @@ set trafficlist [list]
 set portnamelist [list]
 set trafficnamelist [list]
 set tportlist [list]
+set remote_server "localhost"
+set remote_serverPort "8009"
 proc loadconfig { filename } {
     global portlist
     global trafficlist
@@ -307,11 +320,9 @@ proc loadconfig { filename } {
             # lappend tportlist [ixNet getA $trafficobj -txPortName]
         # }
     }
-
 }
 
 proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
-
 	global ixN_tcl_v
 	global loginInfo
     
@@ -325,7 +336,7 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
 	global remote_serverPort
 	
 	set loginInfo $location
-puts "Login...$location"	
+    puts "Login...$location"	
 	if { $location == "" } {
 		set port "localhost/8009"
 	} else {
@@ -371,16 +382,17 @@ puts "Login...$location"
 				after 15000
                 
                 foreach pname $portnamelist pobj $portlist {
-                    Port $pname NULL NULL $pobj
+                   Port $pname NULL NULL $pobj
                 }
                 
                 foreach tname $trafficnamelist tobj $trafficlist tport $portnamelist {
-                    Traffic $tname $tport $tobj
+                   Traffic $tname $tport $tobj
                 }
 				
 				return
                 
             } else {
+                ixNet exec newConfig
                 return
             }
         }
@@ -399,6 +411,325 @@ proc GetAllPortObj {} {
 		}
 	}
 	return $portObj
+}
+
+proc SearchMinFrameSizeByLoad { args } {
+    set tag "proc SearchMinFrameSizeByLoad [info script]"
+	Deputs "----- TAG: $tag -----"
+    Deputs "Args:$args "
+    
+    array set frame_load [list ]
+    set upstreams [list]
+    set streams [list]
+    set downstreams [list]
+    set duration [ expr 60 * 1000 ]
+	set percentage 99.98
+    set inflation 0
+    set all_streams [list ]
+	foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -frame_len {
+                set frame_size_list $value
+            }
+            -inflation {
+                set inflation $value
+            }
+            -upstreams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend upstreams [ $stream cget -handle ]
+                }
+            }
+            -downstreams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend downstreams [ $stream cget -handle ]
+                }	            
+            }
+            -streams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend streams [ $stream cget -handle ]
+                }	
+            }
+            -duration {
+                set duration [ expr 1000 * $value ]
+            }
+            -resultfile {
+                set resultfile $value
+            }
+			-percentage {
+				set percentage $value
+             }
+        }
+    }
+    Deputs "Input streams: $all_streams"
+    # According to inflation to calculate traffic load
+    foreach frame_size $frame_size_list {
+        set frame_load($frame_size) [expr (($frame_size + 20) * 1.0 / ($frame_size + 20 + $inflation)) * 100]
+        Deputs "Frame size: $frame_size, traffic load: $frame_load($frame_size)"
+    }  
+    
+    set index 0
+    set min_index 0
+    set max_index [ expr [ llength $frame_size_list ] - 1 ]
+    set qulified_index ""
+	set iteration 1
+	set iterationResult false
+    set isRunning false	
+    while { 1 } {
+        if { $qulified_index == $index } {
+            # Don't need to run same fram size twice
+            break   
+        }
+        
+        set frame_size [ lindex $frame_size_list $index ]
+        
+        if { [llength $streams ] > 0 } {
+            foreach stream $streams {
+                set highLevelStream [ ixNet getL $stream configElement ]
+                set frameSize [ ixNet getL $highLevelStream frameSize ]
+                ixNet setA $frameSize -fixedSize $frame_size
+                ixNet commit 
+                set frameRate [ ixNet getL $highLevelStream frameRate ]
+                
+                ixNet setM $frameRate -rate $frame_load($frame_size) -type percentLineRate
+                ixNet commit
+            }
+        } else {
+            set root [ixNet getRoot]
+            set traffic [ixNet getL $root traffic]
+            foreach trafficItem [ixNet getL $traffic trafficItem] {
+                set highLevelStream [ ixNet getL $trafficItem configElement ]
+                set frameSize [ ixNet getL $highLevelStream frameSize ]
+                ixNet setA $frameSize -fixedSize $frame_size
+                ixNet commit 
+                set frameRate [ ixNet getL $highLevelStream frameRate ]
+                set endpointSet [ ixNet getL $trafficItem endpointSet ]
+                set src [ ixNet getA $endpointSet -sources ]
+                
+                ixNet setM $frameRate -rate $frame_load($frame_size) -type percentLineRate
+                ixNet commit
+                
+                foreach upstream $upstreams {
+                    if { $upstream == [ string range $src 0 [ expr [ string length $upstream ] - 1 ] ] ||
+                         $src == [ string range $upstream 0 [ expr [ string length $src ] - 1 ] ] } {
+                        ixNet setM $frameRate -rate 100 -type percentLineRate
+                        ixNet setA $frameSize -fixedSize [ expr $frame_size + $inflation ]
+                        ixNet commit
+                    } elseif { $upstream == $trafficItem } {
+                       ixNet setM $frameRate -rate 100 -type percentLineRate
+                        ixNet setA $frameSize -fixedSize [ expr $frame_size + $inflation ]
+                        ixNet commit
+                    }
+                }
+            }
+        }
+        ixNet commit
+        
+        if { [ catch {
+            foreach traffic $all_streams {
+                #ixNet exec startStatelessTraffic $traffic
+                $traffic start
+            }
+            #Tester::start_traffic
+            after $duration
+            foreach traffic $all_streams {
+                #ixNet exec stopStatelessTraffic $traffic
+                $traffic stop
+            }
+            #Tester::stop_traffic
+            after [expr 10 * 1000]
+        } err ] } {
+            Deputs "Failed to start/stop traffic"
+            break
+        }
+        
+        if { [ Tester::isLossFrames $all_streams] } {
+            set iterationResult false
+        } else {
+            set iterationResult true
+        }
+        if { !$isRunning } {
+            Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams
+        } else {
+            Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams -append true
+        }
+        set isRunning true
+        if { !$iterationResult } {
+            # Failed
+            set min_index $index
+            #Tester::saveResults -resultfile $resultfile -frame_size $frame_size
+            # Reached to minmum frame size 
+            if { $min_index == $max_index} {
+                Deputs "Iteration #$iteration - Frame Size(Bytes): $frame_size, Min Frame Size: [ lindex $frame_size_list $min_index ], Max Frame Size: [ lindex $frame_size_list $max_index ], Iteration Result: $iterationResult"
+                break
+            }
+        } else {
+            # Passed
+            set qulified_index $index
+            set max_index $index
+            Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams -append true
+            #Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams
+            # Reached to maximum frame size
+            if { $min_index == $max_index} {
+                Deputs "Iteration #$iteration - Frame Size(Bytes): $frame_size, Min Frame Size: [ lindex $frame_size_list $min_index ], Max Frame Size: [ lindex $frame_size_list $max_index ], Iteration Result: $iterationResult"
+                break
+            }
+        }
+
+        Deputs "Iteration #$iteration - Frame Size(Bytes): $frame_size, Min Frame Size: [ lindex $frame_size_list $min_index ], Max Frame Size: [ lindex $frame_size_list $max_index ], Iteration Result: $iterationResult"
+        incr iteration
+        
+        set index [ expr ($min_index + $max_index) / 2 ]
+        if { $index == $min_index } {
+            incr index
+            
+            if { $index > $max_index } {
+                set index $max_index
+            }
+        }
+    }
+    
+    set ret [ GetStandardReturnHeader ]
+    if { $qulified_index != "" } {
+        set ret $ret[ GetStandardReturnBody "frame_size" [ lindex $frame_size_list $qulified_index ] ]
+    } else {
+        set ret $ret[ GetStandardReturnBody "frame_size" 0 ]
+    }
+    
+    return $ret
+}
+
+proc RunCustomizeSizeByLoad { args } {
+    set tag "proc RunCustomizeSizeByLoad [info script]"
+	Deputs "----- TAG: $tag -----"
+    Deputs "Args:$args "
+    
+    array set frame_load [list ]
+    set upstreams [list]
+    set streams [list]
+    set downstreams [list]
+    set duration [ expr 60 * 1000 ]
+	set percentage 100
+    set inflation 0
+    set all_streams [list ]
+	foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -frame_len {
+                set frame_size_list $value
+            }
+            -inflation {
+                set inflation $value
+            }
+            -upstreams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend upstreams [ $stream cget -handle ]
+                }
+            }
+            -downstreams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend downstreams [ $stream cget -handle ]
+                }	            
+            }
+            -streams {
+                foreach stream $value {
+                    lappend all_streams $stream
+                    lappend streams [ $stream cget -handle ]
+                }	
+            }
+            -duration {
+                set duration [ expr 1000 * $value ]
+            }
+            -resultfile {
+                set resultfile $value
+            }
+			-percentage {
+				set percentage $value
+             }
+        }
+    }
+    Deputs "Input streams: $all_streams"
+    # According to inflation to calculate traffic load
+    foreach frame_size $frame_size_list {
+        set frame_load($frame_size) [expr (($frame_size + 20) * 1.0 / ($frame_size + 20 + $inflation)) * $percentage]
+        Deputs "Frame size: $frame_size, traffic load: $frame_load($frame_size)"
+    }  
+    
+    set isRunning false	
+    foreach frame_size $frame_size_list {
+        if { [llength $streams ] > 0 } {
+            foreach stream $streams {
+                set highLevelStream [ ixNet getL $stream configElement ]
+                set frameSize [ ixNet getL $highLevelStream frameSize ]
+                ixNet setA $frameSize -fixedSize $frame_size
+                ixNet commit 
+                set frameRate [ ixNet getL $highLevelStream frameRate ]
+                
+                ixNet setM $frameRate -rate $frame_load($frame_size) -type percentLineRate
+                ixNet commit
+            }
+        } else {
+            set root [ixNet getRoot]
+            set traffic [ixNet getL $root traffic]
+            foreach trafficItem [ixNet getL $traffic trafficItem] {
+                set highLevelStream [ ixNet getL $trafficItem configElement ]
+                set frameSize [ ixNet getL $highLevelStream frameSize ]
+                ixNet setA $frameSize -fixedSize $frame_size
+                ixNet commit 
+                set frameRate [ ixNet getL $highLevelStream frameRate ]
+                set endpointSet [ ixNet getL $trafficItem endpointSet ]
+                set src [ ixNet getA $endpointSet -sources ]
+                
+                ixNet setM $frameRate -rate $frame_load($frame_size) -type percentLineRate
+                ixNet commit
+                
+                foreach upstream $upstreams {
+                    if { $upstream == [ string range $src 0 [ expr [ string length $upstream ] - 1 ] ] ||
+                         $src == [ string range $upstream 0 [ expr [ string length $src ] - 1 ] ] } {
+                        ixNet setM $frameRate -rate 100 -type percentLineRate
+                        ixNet setA $frameSize -fixedSize [ expr $frame_size + $inflation ]
+                        ixNet commit
+                    } elseif { $upstream == $trafficItem } {
+                       ixNet setM $frameRate -rate 100 -type percentLineRate
+                        ixNet setA $frameSize -fixedSize [ expr $frame_size + $inflation ]
+                        ixNet commit
+                    }
+                }
+            }
+        }
+        ixNet commit
+        
+        if { [ catch {
+            foreach traffic $all_streams {
+                #ixNet exec startStatelessTraffic $traffic
+                $traffic start
+            }
+            #Tester::start_traffic
+            after $duration
+            foreach traffic $all_streams {
+                #ixNet exec stopStatelessTraffic $traffic
+                $traffic stop
+            }
+            after [expr 5 * 1000]
+        } err ] } {
+            Deputs "Failed to start/stop traffic"
+            break
+        }
+        
+        if { !$isRunning } {
+            Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams
+        } else {
+            Tester::saveResults -resultfile $resultfile -frame_size $frame_size -streams $all_streams -append true
+        }
+        set isRunning true
+    }
+    
+    return [ GetStandardReturnHeader ]
 }
 
 set currDir [file dirname [info script]]
@@ -452,6 +783,16 @@ if { [ catch {
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
+}
+puts "load package Ixia_NetFlow..."
+if { [ catch {
+	source [file join $currDir Ixia_NetFlow.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetFlow.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
 } 
 puts "load package Ixia_NetDhcp..."
 if { [ catch {
@@ -459,6 +800,16 @@ if { [ catch {
 } err ] } {
 	if { [ catch {
 			source [file join $currDir Ixia_NetDhcp.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
+puts "load package Ixia_NetDhcpPD..."
+if { [ catch {
+	source [file join $currDir Ixia_NetDhcpPD.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetDhcpPD.tbc]
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
@@ -593,6 +944,16 @@ if { [ catch {
 		puts "load package fail...$err $tbcErr"
 	}
 } 
+puts "load package Ixia_NetRfc3918..."
+if { [ catch {
+	source [file join $currDir Ixia_NetRFC3918.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetRFC3918.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
+}
 puts "load package Ixia_NetDot1xRate..."
 if { [ catch {
 	source [file join $currDir Ixia_NetDot1xRate.tcl]
@@ -642,6 +1003,17 @@ if { [ catch {
 	} tbcErr ] } {
 		puts "load package fail...$err $tbcErr"
 	}
+}
+
+puts "load package Ixia_NetL2TP..."
+if { [ catch {
+	source [file join $currDir Ixia_NetL2TP.tcl]
+} err ] } {
+	if { [ catch {
+			source [file join $currDir Ixia_NetL2TP.tbc]
+	} tbcErr ] } {
+		puts "load package fail...$err $tbcErr"
+	}
 } 
 
 set errNumber(1)    "Bad argument value or out of range..."
@@ -651,20 +1023,23 @@ set errNumber(4)    "Confilct argument..."
 puts "set error message list..."
 
 set ixN_tcl_v "6.0"
+set ixN_lib ""
 puts "connect to ixNetwork Tcl Server version $ixN_tcl_v"
 if { $::tcl_platform(platform) == "windows" } {
 	puts "windows platform..."
 	package require registry
 
     if { [ catch {
-	    lappend auto_path  "[ GetEnvTcl IxNetwork ]/TclScripts/lib/IxTclNetwork"
+        set ixN_lib "[ GetEnvTcl IxNetwork ]/TclScripts/lib/IxTclNetwork"
+	    lappend auto_path  $ixN_lib
     } err ] } {
-		lappend auto_path $currDir/IxNetwork
+        set ixN_lib $currDir/IxNetwork
+		lappend auto_path $ixN_lib
         puts "Failed to invoke IxNetwork environment...$err"
 		puts "Try to load IxNetwork local lib..."
 	}
 
-puts "load package IxTclNetwork..."
+    puts "load package IxTclNetwork..."
 	package require IxTclNetwork
 	puts "load package IxTclHal..."	
 	catch {	
@@ -699,6 +1074,5 @@ if { [file exist "c:/windows/temp/ixlogfile"] } {
 		set logfile_name "c:/temp/ixlogfile/$timeVal.txt"
 	}
 }
-
 IxDebugOn
 IxDebugCmdOn

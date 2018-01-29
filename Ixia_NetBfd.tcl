@@ -16,16 +16,17 @@ class BfdSession {
 		global errNumber
 		
 		set tag "body BfdSession::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		set portObj [ GetObject $port ]
 		set handle ""
 		reborn
 	}
 	
+    method get_stats {} {}
 	method reborn {} {
 		set tag "body BfdSession::reborn [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 
 		if { [ catch {
 			set hPort   [ $portObj cget -handle ]
@@ -48,11 +49,11 @@ Deputs "----- TAG: $tag -----"
 		
 		#-- add bfd protocol
 		set handle [ ixNet add $hPort/protocols/bfd router ]
-		ixNet setA $handle -Enabled True
+		ixNet setA $handle -enabled True
 		ixNet commit
 		set handle [ ixNet remapIds $handle ]
 		ixNet setA $handle -name $this
-Deputs "handle:$handle"		
+        Deputs "handle:$handle"		
 		set protocol bfd
 
 	}
@@ -74,6 +75,64 @@ Deputs "handle:$handle"
 			set interface($int) $hInt	
 		}
 	}	
+}
+
+body BfdSession::get_stats {} {
+    set tag "body BfdSession::get_stats [info script]"
+    Deputs "----- TAG: $tag -----"
+    set root [ixNet getRoot]
+	set view {::ixNet::OBJ-/statistics/view:"BFD Aggregated Statistics"}
+    # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
+    Deputs "view:$view"
+    set captionList             [ ixNet getA $view/page -columnCaptions ]
+    Deputs "caption list:$captionList"
+	set port_name				[ lsearch -exact $captionList {Stat Name} ]
+    set session_conf            [ lsearch -exact $captionList {Sessions Configured} ]
+    set session_succ            [ lsearch -exact $captionList {Configured UP-Sessions} ]
+    set flap         	        [ lsearch -exact $captionList {Session Flap Count} ]
+	
+    set ret [ GetStandardReturnHeader ]
+	
+    set stats [ ixNet getA $view/page -rowValues ]
+    Deputs "stats:$stats"
+
+    set connectionInfo [ ixNet getA $hPort -connectionInfo ]
+    Deputs "connectionInfo :$connectionInfo"
+    regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
+    Deputs "chas:$chassis card:$card port$port"
+
+    foreach row $stats {  
+        eval {set row} $row
+        Deputs "row:$row"
+        Deputs "portname:[ lindex $row $port_name ]"
+		if { [ string length $card ] == 1 } {
+			set card "0$card"
+		}
+		if { [ string length $port ] == 1 } {
+			set port "0$port"
+		}
+		if { "${chassis}/Card${card}/Port${port}" != [ lindex $row $port_name ] } {
+			continue
+		}
+
+        set statsItem   "session_conf"
+        set statsVal    [ lindex $row $session_conf ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+          
+        set statsItem   "session_succ"
+        set statsVal    [ lindex $row $session_succ ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+        
+        set statsItem   "flap"
+        set statsVal    [ lindex $row $flap ]
+        Deputs "stats val:$statsVal"
+        set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
+        Deputs "ret:$ret"
+    }
+        
+    return $ret
 }
 
 body BfdSession::config { args } {

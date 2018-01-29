@@ -68,7 +68,7 @@ Deputs "ldp:$ldp"
 
 	method generate_interface { args } {
 		set tag "body LdpSession::generate_interface [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		foreach int $rb_interface {
 		
 			if { [ ixNet getA $int -type ] == "routed" } {
@@ -528,20 +528,20 @@ class VcLsp {
 		global errNumber
 		
 		set tag "body VcLsp::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		set ldpObj $ldp
 		reborn
 	}
 	method reborn {} {
 		set tag "body VcLsp::reborn [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		set hLdp [ $ldpObj cget -handle ]
 		set range [ ixNet add $hLdp l2Interface ]
-Deputs "range:$range"
+        Deputs "range:$range"
 		ixNet setA $range -enabled True
 		ixNet commit
 		set handle [ ixNet remapIds $range ]
-Deputs "handle:$handle"		
+        Deputs "handle:$handle"		
 		set range [ ixNet add $handle l2VcRange ]
 		ixNet setM $range -enabled True \
 			-fecType pwIdFec \
@@ -549,7 +549,7 @@ Deputs "handle:$handle"
 		ixNet commit
 		set vcRange [ ixNet remapIds $range ]
 
-Deputs "rb_interface:[ $ldpObj cget -rb_interface ]"		
+        Deputs "rb_interface:[ $ldpObj cget -rb_interface ]"		
 		foreach int [ $ldpObj cget -rb_interface ] {
 			if { [ ixNet getA $int -type ] == "routed" } {
 				set hInterface [ ixNet add $hLdp interface ]
@@ -571,14 +571,13 @@ Deputs "rb_interface:[ $ldpObj cget -rb_interface ]"
 }
 
 body VcLsp::config { args } {
-
     global errorInfo
     global errNumber
     set tag "body VcLsp::config [info script]"
-Deputs "----- TAG: $tag -----"
-	
-#param collection
-Deputs "Args:$args "
+    Deputs "----- TAG: $tag -----"
+        
+    #param collection
+    Deputs "Args:$args "
 	set encap LDP_LSP_ENCAP_ETHERNET_VLAN
 	set peer_address 160.160.160.160
 	set vc_ip_address 1.1.1.1
@@ -603,11 +602,11 @@ Deputs "Args:$args "
 				set mac_start $value
 			}
 			-mac_step  {
-# -- unsupported yet
-			set mac_step  $value
+                # -- unsupported yet
+                set mac_step  $value
 			}
 			-mac_num  {
-# -- unsupported yet
+                # -- unsupported yet
 				set mac_num  $value
 			}
 			-vc_id_start {
@@ -680,7 +679,7 @@ Deputs "Args:$args "
 				set ixencap atmvpc
 			}
 			LDP_LSP_ENCAP_ETHERNET_VPLS {
-				set ixencap ethernet
+				set ixencap vlan
 			}
 		}
 		ixNet setA $handle -type $ixencap

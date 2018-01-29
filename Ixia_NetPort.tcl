@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 2.16
+# Release Version 2.17
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -87,10 +87,14 @@
 #		43. add Port.set_port_dynamic_rate
 # Version 2.16.4.59
 #		44. remove param validation in port.config
+# Version 2.17.4.60
+#		45. add port.Reconnect
+# Version 2.17.4.60
+#       46. modify Host.enable|disable, add hostInfo for 3918
 
 class Port {
     inherit NetObject
-    constructor { { hw_id NULL } { medium NULL } { hPort NULL } } {}
+    constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0} } {}
     method config { args } {}
     method get_status {} {}
     method get_stats {} {}
@@ -104,10 +108,10 @@ class Port {
     method set_port_dynamic_rate { args } {}
 	method resovle_mac { args } {
 		set tag "body Port::resovle_mac [info script]"
-	Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		global errorInfo
 		global errNumber
-	Deputs "Args:$args "
+        Deputs "Args:$args "
 		foreach { key value } $args {
 			set key [string tolower $key]
 			switch -exact -- $key {
@@ -126,12 +130,15 @@ class Port {
 			}
 		}
 		if { [ info exists neighbor_ip ] } {
-Deputs "get neighbor"
+            Deputs "get neighbor"
 			set neighbor [ ixNet getF $handle discoveredNeighbor -neighborIp $neighbor_ip ]
-Deputs "neighbor:$neighbor"
-Deputs "get neighbor mac"
+            if { $neighbor == "" } {
+                return "00:00:00:00:00:00"
+            }
+            Deputs "neighbor:$neighbor"
+            Deputs "get neighbor mac"
 			set neighbor_mac [ ixNet getA $neighbor -neighborMac ]
-Deputs "neighbor mac:$neighbor_mac"
+            Deputs "neighbor mac:$neighbor_mac"
 		}
 		if { [ IsMacAddress $neighbor_mac ] } {
 			return $neighbor_mac
@@ -145,7 +152,7 @@ Deputs "neighbor mac:$neighbor_mac"
     method set_dot1x {args } {}
   	method resume {} {
 		set tag "body Traffic::resume [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		set info [ ixNet getA $handle -connectionInfo ]
 		regexp {chassis="(\d+.\d+.\d+.\d+)"} $info chas chasAddr
 		regexp {card="(\d+)"} $info card cardId
@@ -174,9 +181,9 @@ Deputs "----- TAG: $tag -----"
 	}
 	
     
-    method GetRealPort { chas card port } {}
-    method Connect { location { medium NULL } { checkLink 0 } } {}
-    method Reconnect { location { medium NULL } { checkLink 0 } } {}
+    method GetRealPort { chas card port force } {}
+    method Connect { location { medium NULL } { checkLink 0 } {force 0}} {}
+    method Reconnect { location { medium NULL } { checkLink 0 } {force 0} } {}
     method CheckStrangePort {} {}
     
     public variable location
@@ -186,16 +193,16 @@ Deputs "----- TAG: $tag -----"
 	public variable PortNo
 }
 
-body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } } {
+body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0} } {
     set tag "body Port::ctor [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
-# -- Check for Multiuser Login
+    # -- Check for Multiuser Login
 	set portObjList [ GetAllPortObj ]
 	if { [ llength $portObjList ] == 0 } {
-Deputs "All port obj:[GetAllPortObj]"
+        Deputs "All port obj:[GetAllPortObj]"
 		set strangePort [ CheckStrangePort ]
-Deputs "Strange port:$strangePort"		
+        Deputs "Strange port:$strangePort"		
 		if { $strangePort == 0 } {
 			global loginInfo
 			Login $loginInfo
@@ -203,27 +210,27 @@ Deputs "Strange port:$strangePort"
 	}
 	set handle ""
 
-Deputs Step10
+    Deputs Step10
     if { $hw_id != "NULL" } {
-Deputs "hw_id:$hw_id"	
-# -- check hardware
+        Deputs "hw_id:$hw_id"	
+        # -- check hardware
 		set locationInfo [ split $hw_id "/" ]
 		set chassis     [ lindex $locationInfo 0 ]
 		set ModuleNo    [ lindex $locationInfo 1 ]
 		set PortNo      [ lindex $locationInfo 2 ]
-		if { [ GetRealPort $chassis $ModuleNo $PortNo ] == [ ixNet getNull ] } {
+		if { [ GetRealPort $chassis $ModuleNo $PortNo 0 ] == [ ixNet getNull ] } {
 			error "Port hardware not found: $hw_id"
 		}
-Deputs Step20	
+        Deputs Step20	
 		catch {
 			if { $medium != "NULL" } {
-				set handle [ Connect $hw_id $medium 1 ]
+				set handle [ Connect $hw_id $medium 1  $force]
 			} else {
-				set handle [ Connect $hw_id NULL 0]
+				set handle [ Connect $hw_id NULL 0 $force]
 			}
 		}
 		set location $hw_id
-Deputs "location:$location" 
+        Deputs "location:$location" 
     } else {
         if { $hPort != "NULL" } {
 			set chassis ""
@@ -232,13 +239,20 @@ Deputs "location:$location"
 
 			set handle $hPort
 			set connectionInfo [ ixNet getA $handle -connectionInfo ]
-		Deputs "connectionInfo :$connectionInfo"
+            Deputs "connectionInfo :$connectionInfo"
 			regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
-		Deputs "chas:$chassis card:$card port$port"
+            Deputs "chas:$chassis card:$card port$port"
 			set location ${chassis}/${card}/${port}
 			ixNet setA $handle -name $this
 			ixNet commit
-		}   
+		} else {
+            Deputs "offline create"
+            set root [ixNet getRoot]
+            set handle [ixNet add $root vport]
+            ixNet setA $handle -name $this
+            ixNet commit
+            set handle [ixNet remapIds $handle]
+        }  
     }
 	set intf_mac 	 ""
 	set intf_ipv4	 ""
@@ -259,100 +273,102 @@ Deputs "----- TAG: $tag -----"
 	return 1
 }
 
-body Port::Connect { location { medium NULL } { checkLink 0 } } {
+body Port::Connect { location { medium NULL } { checkLink 0 } { force 0 } } {
     set tag "body Port::Connect [info script]"
-Deputs "----- TAG: $tag -----"
-# -- add vport
-
+    Deputs "----- TAG: $tag -----"
+    # -- add vport
     set root    [ ixNet getRoot ]
     set vport   [ ixNet add $root vport ]
     ixNet setA $vport -name $this
 	if { $medium != "NULL" } {
-Deputs "connect medium:$medium"	
-		ixNet setA $vport/l1Config/ethernet -media $medium
+        Deputs "connect medium:$medium"	
+        if {[ixNet getA $vport -type] == "ethernet" } {
+            ixNet setA $vport/l1Config/ethernet -media $medium
+        }
+		
 	}
     set vport [ixNet remapIds $vport]
     set handle $vport
-   
-# -- connect to hardware
+
+	# -- connect to hardware
 	set locationInfo [ split $location "/" ]
 	set chassis     [ lindex $locationInfo 0 ]
 	set ModuleNo    [ lindex $locationInfo 1 ]
 	set PortNo      [ lindex $locationInfo 2 ]
 
 	if { [ string tolower [ ixNet getA $root/statistics -guardrailEnabled ] ] != "true" } {
-Deputs "guardrail: false"
+        Deputs "guardrail: false"
 		catch {
 			ixNet setA $root/statistics -guardrailEnabled True
 			ixNet commit
 		}
-Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
+        Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
 	}
 
 	if { $checkLink } {
 		#fix license issue
 		ixTclNet::AssignPorts [ list [ list $chassis $ModuleNo $PortNo ] ] {} $handle true
 	} else {
-		ixNet setA $handle -connectedTo [ GetRealPort $chassis $ModuleNo $PortNo ] 
+		ixNet setA $handle -connectedTo [ GetRealPort $chassis $ModuleNo $PortNo $force ] 
 		ixNet commit
 	}
 	set handle [ixNet remapIds $handle]
-Deputs "handle:$handle"	
+    Deputs "handle:$handle"	
 	ixNet setA $handle -transmitIgnoreLinkStatus True
        ixNet commit       
  
 	return $handle
 }
 
-body Port::Reconnect { location { medium NULL } { checkLink 0 } } {
+body Port::Reconnect { location { medium NULL } { checkLink 0 } { force 0 } } {
     set tag "body Port::Reconnect [info script]"
-Deputs "----- TAG: $tag -----"
-# -- add vport
+    Deputs "----- TAG: $tag -----"
+    # -- add vport
     set root    [ ixNet getRoot ]   
-# -- connect to hardware
+    # -- connect to hardware
 	set locationInfo [ split $location "/" ]
 	set chassis     [ lindex $locationInfo 0 ]
 	set ModuleNo    [ lindex $locationInfo 1 ]
 	set PortNo      [ lindex $locationInfo 2 ]
 
 	if { [ string tolower [ ixNet getA $root/statistics -guardrailEnabled ] ] != "true" } {
-Deputs "guardrail: false"
+        Deputs "guardrail: false"
 		catch {
 			ixNet setA $root/statistics -guardrailEnabled True
 			ixNet commit
 		}
-Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
+        Deputs "guardrail:[ ixNet getA $root/statistics -guardrailEnabled  ]"
 	}
 
 	if { $checkLink } {
 		#fix license issue
 		ixTclNet::AssignPorts [ list [ list $chassis $ModuleNo $PortNo ] ] {} $handle true
 	} else {
-		ixNet setA $handle -connectedTo [ GetRealPort $chassis $ModuleNo $PortNo ] 
+		ixNet setA $handle -connectedTo [ GetRealPort $chassis $ModuleNo $PortNo $force ] 
 		ixNet commit
 	}
 	set handle [ixNet remapIds $handle]
-Deputs "handle:$handle"	
+    Deputs "handle:$handle"	
 	ixNet setA $handle -transmitIgnoreLinkStatus True
-       ixNet commit
+    ixNet commit
  
 	return $handle
 }
 
-body Port::GetRealPort { chassis card port } {
+body Port::GetRealPort { chassis card port force } {
     set tag "body Port::GetRealPort [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
     set root    [ixNet getRoot]
-Deputs "chassis:$chassis"        
+    Deputs "chassis:$chassis"        
 	set root [ixNet getRoot]
 	if { [ llength [ixNet getList $root/availableHardware chassis] ] == 0 } {
-Deputs Step20
+        Deputs Step20
 		set chas [ixNet add $root/availableHardware chassis]
 		ixNet setA $chas -hostname $chassis
 		ixNet commit
 		set chas [ixNet remapIds $chas]
 	} else {
-Deputs Step30
+        Deputs Step30
 		set chas [ixNet getList $root/availableHardware chassis]
 		set hostname [ixNet getA $chas -hostname]
 		if { $hostname != $chassis } {
@@ -366,29 +382,29 @@ Deputs Step30
 	}
 	set chassis $chas
     set realCard $chassis/card:$card
-Deputs "card:$realCard"
+    Deputs "card:$realCard"
     set cardList [ixNet getList $chassis card]
-Deputs "cardList:$cardList"
+    Deputs "cardList:$cardList"
     set findCard 0
     foreach ca $cardList {
         eval set ca $ca
         eval set realCard $realCard
-Deputs "realCard:$realCard"
-Deputs "ca:$ca"
+        Deputs "realCard:$realCard"
+        Deputs "ca:$ca"
         if { $ca == $realCard } {
             set findCard 1
             break
         } 
     }
-Deputs Step10
-Deputs "findCard:$findCard"
+    Deputs Step10
+    Deputs "findCard:$findCard"
     if { $findCard == 0} {
         return [ixNet getNull]
     }
     set realPort $chassis/card:$card/port:$port
-Deputs "port:$realPort"
+    Deputs "port:$realPort"
     set portList [ ixNet getList $chassis/card:$card port ]
-Deputs "portList:$portList"
+    Deputs "portList:$portList"
     set findPort 0
     foreach po $portList {
         eval set po $po
@@ -398,19 +414,21 @@ Deputs "portList:$portList"
             break
         }
     }
-Deputs "findPort:$findPort"
+    Deputs "findPort:$findPort"
     if { $findPort } {
-Deputs "real port:	$chassis/card:$card/port:$port"
-		ixNet exec clearOwnership $chassis/card:$card/port:$port
+        Deputs "real port:	$chassis/card:$card/port:$port"
+        if { $force } {
+            ixNet exec clearOwnership $chassis/card:$card/port:$port
+        }
+		
         return $chassis/card:$card/port:$port
     } else {
         return [ixNet getNull]
     }
 }
 
-body Port::config { args } {
-    
-# object reborn
+body Port::config { args } {    
+    # object reborn
 	if { $handle == "" } {
 		if { $location != "NULL" } {
 			catch {
@@ -421,7 +439,7 @@ body Port::config { args } {
 			return [ GetErrorReturnHeader "No port information or wrong port information." ]
 		}
 	}
-#
+    #
     global errorInfo
     global errNumber
 
@@ -459,9 +477,9 @@ body Port::config { args } {
 	set sig_end 1
 	
     set tag "body Port::config [info script]"
-Deputs "----- TAG: $tag -----"
-#param collection
-Deputs "Args:$args "
+    Deputs "----- TAG: $tag -----"
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
@@ -540,11 +558,19 @@ Deputs "Args:$args "
                     error "$errNumber(1) key:$key value:$value"
                 }
             }
+            -fec_enable {
+                set trans [ BoolTrans $value ]
+                if { $trans == "1" || $trans == "0" } {
+                    set fec_enable $trans
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
             -media {
                 set value [ string tolower $value ]
                 if { [ lsearch -exact $EMedia $value ] >= 0 } {
                     set media $value
-Deputs "media:$media"                    
+                    Deputs "media:$media"                    
                 } else {
                     error "$errNumber(1) key:$key value:$value"
                 }
@@ -555,11 +581,20 @@ Deputs "media:$media"
                         set speed 10
                     }
                     100M {
-Deputs "speed:$speed"					
+                        Deputs "speed:$speed"					
                         set speed 100
                     }
                     1G {
                         set speed 1000
+                    }
+					10G {
+                        set speed "speed10g"
+                    }
+					2.5G {
+                        set speed "speed2.5g"
+                    }
+					5G {
+                        set speed "speed5g"
                     }
                 }
             }
@@ -589,70 +624,76 @@ Deputs "speed:$speed"
                     error "$errNumber(1) key:$key value:$value"
                 }
             }
-            # -inner_vlan_id {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
-                    # set inner_vlan_id $value
-                    # set flagInnerVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -inner_vlan_step {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
-                    # set inner_vlan_step $value
-                    # set flagInnerVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -inner_vlan_num {
-                # if { [ string is integer $value ] && ( $value >= 0 ) } {
-                    # set inner_vlan_num $value
-                    # set flagInnerVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -inner_vlan_priority {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
-                    # set inner_vlan_priority $value
-                    # set flagInnerVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -outer_vlan_id {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
-                    # set outer_vlan_id $value
-                    # set flagOuterVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -outer_vlan_step {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
-                    # set outer_vlan_step $value
-                    # set flagOuterVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -outer_vlan_num {
-                # if { [ string is integer $value ] && ( $value >= 0 ) } {
-                    # set outer_vlan_num $value
-                    # set flagOuterVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
-            # -outer_vlan_priority {
-                # if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
-                    # set outer_vlan_priority $value
-                    # set flagOuterVlan   1
-                # } else {
-                    # error "$errNumber(1) key:$key value:$value"
-                # }
-            # }
+            -inner_vlan_enable {
+                set flagInnerVlan   1
+            }
+            -inner_vlan_id {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
+                    set inner_vlan_id $value
+                    set flagInnerVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -inner_vlan_step {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
+                    set inner_vlan_step $value
+                    set flagInnerVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -inner_vlan_num {
+                if { [ string is integer $value ] && ( $value >= 0 ) } {
+                    set inner_vlan_num $value
+                    set flagInnerVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -inner_vlan_priority {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
+                    set inner_vlan_priority $value
+                    set flagInnerVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -outer_vlan_enable {
+                set flagOuterVlan   1
+            }
+            -outer_vlan_id {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
+                    set outer_vlan_id $value
+                    set flagOuterVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -outer_vlan_step {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 4096 ) } {
+                    set outer_vlan_step $value
+                    set flagOuterVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -outer_vlan_num {
+                if { [ string is integer $value ] && ( $value >= 0 ) } {
+                    set outer_vlan_num $value
+                    set flagOuterVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
+            -outer_vlan_priority {
+                if { [ string is integer $value ] && ( $value >= 0 ) && ( $value < 8 ) } {
+                    set outer_vlan_priority $value
+                    set flagOuterVlan   1
+                } else {
+                    error "$errNumber(1) key:$key value:$value"
+                }
+            }
             -ipv6_addr {
             	set ipv6_addr $value
             }
@@ -700,12 +741,19 @@ Deputs "speed:$speed"
 			-sig_end {
 				set sig_end $value
 			}
+            -mac_addr {
+                set mac_addr $value
+            }
+            -transmit_mode {
+                set transmit_mode $value
+                #interleaved | sequential
+            }
         }
     }
-# IxDebugOn    
-Deputs "add interface on port..."
+    # IxDebugOn    
+    Deputs "add interface on port..."
 	set intLen [ llength [ ixNet getList $handle interface ] ] 
-Deputs "interface count:$intLen"
+    Deputs "interface count:$intLen"
     if { $intLen == 0 } {
 		set interface [list]
     } else {
@@ -724,11 +772,23 @@ Deputs "interface count:$intLen"
 		lappend interface $newInt
 		lappend intf_mac [ ixNet getA $newInt/ethernet -macAddress ]
 	}
-Deputs "port interface mac:$intf_mac"		
+    Deputs "port interface mac:$intf_mac"		
     
-# -- enable ping defaultly
+    if { [ info exists mac_addr ] } {
+        foreach int $interface {
+            ixNet setA $int/ethernet -macAddress $mac_addr
+        }
+    }
+    
+    if { [ info exists transmit_mode ] } {
+      
+        ixNet setA $handle -txMode $transmit_mode
+        ixNet commit
+        
+    }
+    # -- enable ping defaultly
     ixNet setA $handle/protocols/ping -enabled true
-# -- change the autoInstrumentation defaultly
+    # -- change the autoInstrumentation defaultly
     # ixNet setA $handle/l1Config/ethernet -autoInstrumentation floating
     ixNet commit
 	if { [ info exists ip_version ] == 0 || $ip_version != "ipv4" } {
@@ -740,7 +800,7 @@ Deputs "port interface mac:$intf_mac"
 			set ipv6_addr "::${a}:${b}:${c}:${d}"	
 		}
 	}
-Deputs "set ipv6 on interface..."
+    Deputs "set ipv6 on interface..."
     if { [ info exists ipv6_addr ] } {
 	
 		foreach int $interface {
@@ -753,11 +813,11 @@ Deputs "set ipv6 on interface..."
 
 			ixNet setA $ipv6Int -ip $ipv6_addr 
 			ixNet setA $ipv6Int -prefixLength $ipv6_mask
-#==			increment not supported 
+            #==			increment not supported 
 		}
 	    ixNet commit
     }	
-Deputs "set dut ipv6 address..."	
+    Deputs "set dut ipv6 address..."	
     if { [ info exists dut_ipv6 ] } {
 		foreach int $interface {
 			if { [ llength [ ixNet getList $int ipv6 ] ] == 0 } {
@@ -768,12 +828,12 @@ Deputs "set dut ipv6 address..."
 			ixNet setA $ipv6Int -gateway $dut_ipv6
 			ixNet setA $ipv6Int -prefixLength $ipv6_mask
 			# set dut_ip [ IncrementIPAddr $dut_ip $dut_ip_mod $dut_ip_step ]
-# Deputs "dut_ip: $dut_ip"
+            # Deputs "dut_ip: $dut_ip"
 		}
 	    ixNet commit
     }	
 	
-Deputs "set ipv4 on interface..."
+    Deputs "set ipv4 on interface..."
     if { [ info exists intf_ip ] } {
 	
 		foreach int $interface {
@@ -786,16 +846,16 @@ Deputs "set ipv4 on interface..."
 			
 			ixNet setA $ipv4Int -ip $intf_ip 
 			ixNet setA $ipv4Int -maskWidth $mask
-Deputs "int_ip increment:$intf_ip $intf_ip_mod $intf_ip_step"
+            Deputs "int_ip increment:$intf_ip $intf_ip_mod $intf_ip_step"
 			lappend intf_ipv4 $intf_ip
 			set intf_ip [ IncrementIPAddr $intf_ip $intf_ip_mod $intf_ip_step ]
-Deputs "int_ip: $intf_ip"
+            Deputs "int_ip: $intf_ip"
 		}
     }
-Deputs "port intf_ipv4:$intf_ipv4"
-ixNet commit
+    Deputs "port intf_ipv4:$intf_ipv4"
+    ixNet commit
 
-Deputs "set dut ipv4 address..."	
+    Deputs "set dut ipv4 address..."	
     if { [ info exists dut_ip ] } {
 		foreach int $interface {
 			if { [ llength [ ixNet getList $int ipv4 ] ] == 0 } {
@@ -811,42 +871,40 @@ Deputs "dut_ip: $dut_ip"
     }
 ixNet commit
   
-# Deputs "set vlan on interface"
-    # if { $flagInnerVlan } {
-		# foreach int $interface {
-			# if { [ llength [ixNet getL $int vlan] ] > 0 } {
-				# set vlan [ lindex [ixNet getL $int vlan] 0 ]
-			# } else {
-				# set vlan [ ixNet add $int vlan ]
-			# }
-			
-			# ixNet setM $vlan \
-				# -vlanId         $inner_vlan_id \
-				# -vlanEnable     true \
-				# -vlanCount      $inner_vlan_num \
-				# -vlanPriority   $inner_vlan_priority
-		# }
-    # }
-    
-    # if { $flagOuterVlan } {
-		# foreach int $interface {
-			# if { [ llength [ixNet getL $int vlan] ] > 1 } {
-				# set vlan [ lindex [ixNet getL $int vlan] 1 ]
-			# } else {
-				# set vlan [ ixNet add $int vlan ]
-			# }
-			
-			# ixNet setM $vlan \
-				# -vlanId         $outer_vlan_id \
-				# -vlanEnable     true \
-				# -vlanCount      $outer_vlan_num \
-				# -vlanPriority   $outer_vlan_priority
-		# }
-    # }
-ixNet commit    
+    Deputs "set vlan on interface"
+    if { $flagOuterVlan } {
+        foreach int $interface {
+            if { [ llength [ixNet getL $int vlan] ] > 0 } {
+                set vlan [ lindex [ixNet getL $int vlan] 0 ]
+            } else {
+                set vlan [ ixNet add $int vlan ]
+            }
+           
+            ixNet setM $vlan \
+                -vlanId         $outer_vlan_id \
+                -vlanEnable     true \
+                -vlanCount      $outer_vlan_num \
+                -vlanPriority   $outer_vlan_priority
+        }
+    }
+    if { $flagInnerVlan } {
+        foreach int $interface {
+            if { [ llength [ixNet getL $int vlan] ] > 0 } {
+                set vlan [ lindex [ixNet getL $int vlan] 0 ]
+            } else {
+                set vlan [ ixNet add $int vlan ]
+            }
+           
+            ixNet setM $vlan \
+                    -vlanId         "$outer_vlan_id,$inner_vlan_id" \
+                    -vlanEnable     true \
+                    -vlanCount      $inner_vlan_num \
+                    -vlanPriority   "$outer_vlan_priority,$inner_vlan_priority"
+        }
+    }
+    ixNet commit    
     
     if { [ info exists type ] } {
-		set flagIntType 0
         switch $type  {
             eth {
                 set ix_type ethernet
@@ -860,17 +918,32 @@ ixNet commit
             }
             10g_wan {
                 set ix_type tenGigWan
-				set flagIntType 1
+            }
+            100g_lan {
+               set ix_type tenFortyHundredGigLan 
             }
         }
         ixNet setA $handle -type $ix_type
-		if { $flagIntType } {
+		if { $ix_type == "tenGigWan" } {
 			ixNet setA $handle/l1Config/tenGigWan -interfaceType wanSdh
 		}
+        ixNet commit
+    }
+    
+    if { [ info exists fec_enable ] } {
+        catch {
+            ixNet setA $handle/l1Config/tenFortyHundredGigLan -enableRsFec $fec_enable
+            ixNet setA $handle/l1Config/tenFortyHundredGigLan -ieeeL1Defaults $fec_enable
+            ixNet commit
+        }
     }
     
     if { [ info exists media ] } {
-        ixNet setA $handle/l1Config/ethernet -media $media
+        if {[ixNet getA $handle -type] == "ethernet" } {
+            ixNet setA $handle/l1Config/ethernet -media $media
+            ixNet commit
+        }
+        
     }
     
     if { [ info exists auto_neg ] } {
@@ -880,26 +953,30 @@ ixNet commit
             set auto_neg False
         }
 		catch {
-			ixNet setA $handle/l1Config/ethernet -autoNegotiate $auto_neg 
-			
+			ixNet setA $handle/l1Config/[ixNet getA $handle -type]  -autoNegotiate $auto_neg 
+			ixNet commit
 		}
     } 
     if { [ info exists speed ] } {
-        set ori_speed [ ixNet getA $handle/l1Config/ethernet -speed ]
-Deputs "ori speed:$ori_speed"
-		if { $ori_speed == "null" } {
-			set ori_speed auto
+	    if {[ixNet getA $handle -type] == "ethernet" } {
+			set ori_speed [ ixNet getA $handle/l1Config/ethernet -speed ]
+			Deputs "ori speed:$ori_speed"
+			if { $ori_speed == "null" } {
+				set ori_speed auto
+			}
+			if { $speed == 1000 } {
+				ixNet setA $handle/l1Config/ethernet -speed speed1000
+				ixNet commit
+			} else {
+				if { ($ori_speed == "auto") || ($ori_speed == "speed1000") } {
+					set duplex fd
+				} else {
+					regexp {\d+([fh]d)} $ori_speed match duplex
+				}
+				ixNet setA $handle/l1Config/ethernet -speed speed$speed$duplex
+				ixNet commit
+			}
 		}
-        if { $speed == 1000 } {
-            ixNet setA $handle/l1Config/ethernet -speed speed1000
-        } else {
-            if { ($ori_speed == "auto") || ($ori_speed == "speed1000") } {
-                set duplex fd
-            } else {
-                regexp {\d+([fh]d)} $ori_speed match duplex
-            }
-            ixNet setA $handle/l1Config/ethernet -speed speed$speed$duplex
-        }
     }
     if { [ info exists duplex ] } {
         switch $duplex {
@@ -908,10 +985,11 @@ Deputs "ori speed:$ori_speed"
         }
         set speed [ ixNet getA $handle/l1Config/ethernet -speed ]
         if { ( $speed == "speed1000" ) || ( $speed == "auto" ) } {
-Deputs "wrong configuration for duplex with speed1000 or auto speed"
+            Deputs "wrong configuration for duplex with speed1000 or auto speed"
         } else {
             if { [ regexp {(\d+)} $speed match speed ] } {
                 ixNet setA $handle/l1Config/ethernet -speed speed$speed$duplex
+                ixNet commit
             }
         }
     }
@@ -919,9 +997,10 @@ Deputs "wrong configuration for duplex with speed1000 or auto speed"
     if { [ info exists enable_arp ] } {
         set root [ixNet getRoot]
         ixNet setA $root/globals/interfaces -arpOnLinkup $enable_arp
+        ixNet commit
     }
     if { [ info exists flow_control ] } {
-Deputs "flow_control:$flow_control"
+        Deputs "flow_control:$flow_control"
 		ixNet setA $handle/l1Config/[ixNet getA $handle -type] -enabledFlowControl $flow_control
 		ixNet commit
     }
@@ -1003,8 +1082,8 @@ Deputs "----- TAG: $tag -----"
 	set interval 	1000
 	set flag 		1
 
-#param collection
-Deputs "Args:$args "
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
@@ -1169,6 +1248,7 @@ Deputs "Args:$args "
                     error "$errNumber(1) key:$key value:$value"
                 }
 			}
+            -outstanding_session -
 			-max_outstanding_session {
                 if { [ string is integer $value ] && ( $value >= 0 ) && ( $value <= 100000 ) } {
                     set max_outstanding_session $value
@@ -1176,39 +1256,72 @@ Deputs "Args:$args "
                     error "$errNumber(1) key:$key value:$value"
                 }
 			}
+            -override_global_setup {
+                set override_global_setup $value
+            }
 		}
 	}
 	
 	set root [ixNet getRoot]
-	set globalSetting [ ixNet getL $root/globals/protocolStack dhcpGlobals ]
-    if { $globalSetting == ""} {
-	    set globalSetting [ ixNet add $root/globals/protocolStack dhcpGlobals ]
+	set dhcpGlobals [ ixNet getL $root/globals/protocolStack dhcpGlobals ]
+    if { $dhcpGlobals == ""} {
+	    set dhcpGlobals [ ixNet add $root/globals/protocolStack dhcpGlobals ]
 	}
-	if { [ info exists request_rate ] } {
-		ixNet setA $globalSetting -setupRateInitial $request_rate
-	}
+    set dhcpOptions [ ixNet getL $handle/protocolStack dhcpOptions ]
+    if { [info exists override_global_setup] && $override_global_setup } {
+        if { [ info exists request_rate ] } {
+            ixNet setA $dhcpOptions -overrideGlobalSetupRate true
+            ixNet setA $dhcpOptions -setupRateInitial $request_rate
+            ixNet setA $dhcpOptions -setupRateMax $request_rate
+        }
+        if { [ info exists max_outstanding_session ] } {
+            ixNet setA $dhcpOptions -overrideGlobalSetupRate true
+            ixNet setA $dhcpOptions -overrideGlobalTeardownRate true
+            ixNet setA $dhcpOptions -maxOutstandingRequests $max_outstanding_session
+            ixNet setA $dhcpOptions -maxOutstandingReleases $max_outstanding_session
+        }
+        if { [ info exists release_rate ] } {
+            ixNet setA $dhcpOptions -overrideGlobalTeardownRate true
+            ixNet setA $dhcpOptions -teardownRateInitial $release_rate
+            ixNet setA $dhcpOptions -teardownRateMax $release_rate
+        }
+    } else {
+        if { [ info exists request_rate ] } {
+            ixNet setA $dhcpOptions -overrideGlobalSetupRate false
+            ixNet setA $dhcpGlobals -setupRateInitial $request_rate
+            ixNet setA $dhcpGlobals -setupRateMax $request_rate
+        }
+        if { [ info exists max_outstanding_session ] } {
+            ixNet setA $dhcpOptions -overrideGlobalSetupRate false
+            ixNet setA $dhcpOptions -overrideGlobalTeardownRate false
+            ixNet setA $dhcpGlobals -maxOutstandingRequests $max_outstanding_session
+            ixNet setA $dhcpGlobals -maxOutstandingReleases $max_outstanding_session
+        }
+        if { [ info exists release_rate ] } {
+            ixNet setA $dhcpOptions -overrideGlobalTeardownRate false
+            ixNet setA $dhcpGlobals -teardownRateInitial $release_rate
+            ixNet setA $dhcpGlobals -teardownRateMax $release_rate
+        }
+    }
+	
 	if { [ info exists max_request_rate ] } {
-		ixNet setA $globalSetting -setupRateMax $max_request_rate
+		ixNet setA $dhcpGlobals -setupRateMax $max_request_rate
 	}
 	if { [ info exists request_rate_step ] } {
-		ixNet setA $globalSetting -setupRateIncrement $request_rate_step
+		ixNet setA $dhcpGlobals -setupRateIncrement $request_rate_step
 	}
 	
     if { [ info exists lease_time ] } {
-		ixNet setA $globalSetting  -dhcp4AddrLeaseTime  $lease_time
+		ixNet setA $dhcpGlobals  -dhcp4AddrLeaseTime  $lease_time
 	}
-	if { [ info exists release_rate ] } {
-		ixNet setA $globalSetting -teardownRateInitial $release_rate
-	}
+	
 	if { [ info exists max_release_rate ] } {
-		ixNet setA $globalSetting -teardownRateMax $max_release_rate
+		ixNet setA $dhcpGlobals -teardownRateMax $max_release_rate
 	}
 	if { [ info exists release_rate_step ] } {
-		ixNet setA $globalSetting -teardownRateIncrement $release_rate_step
+		ixNet setA $dhcpGlobals -teardownRateIncrement $release_rate_step
 	}
-	if { [ info exists max_outstanding_session ] } {
-		ixNet setA $globalSetting -maxOutstandingRequests $max_outstanding_session
-	}
+	
 	
 	ixNet commit
 	return [ GetStandardReturnHeader ]
@@ -1288,7 +1401,7 @@ Deputs "Args:$args "
 
 body Port::reset {} {
     set tag "body Port::reset [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
     ixNet exec setFactoryDefaults $handle
     ixNet commit
 	return [ GetStandardReturnHeader ]
@@ -1325,11 +1438,12 @@ Deputs "flowList: $flowList"
 		
 Deputs "TxList: $txList"
 				
-		foreach  startTx $txList {
-		    ixNet exec startStatelessTraffic $startTx
-		    # after 3000
-		}
-			
+		# foreach  startTx $txList {
+		    # ixNet exec startStatelessTraffic $startTx
+		    # # after 3000
+		# }
+		ixNet exec startStatelessTraffic $txList
+        after 2000
 Deputs "All streams are transtmitting!"
 		return [ GetStandardReturnHeader ]
 }
@@ -1359,10 +1473,12 @@ Deputs "flowList: $flowList"
 			}
 		}
 			
-		foreach  stopTx $txList {
-		    ixNet exec stopStatelessTraffic $stopTx
-		    after 3000
-		}
+		# foreach  stopTx $txList {
+		    # ixNet exec stopStatelessTraffic $stopTx
+		    # after 3000
+		# }
+        ixNet exec stopStatelessTraffic $txList
+        after 2000
 Deputs "All streams are stopped!"
 
 		return [ GetStandardReturnHeader ]
@@ -1387,7 +1503,7 @@ Deputs "----- TAG: $tag -----"
 body Port::get_stats {} {
 
     set tag "body Port::get_stats [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
     
 	#{::ixNet::OBJ-/statistics/view:"Port Statistics"}
     set root [ixNet getRoot]
@@ -1395,18 +1511,18 @@ Deputs "----- TAG: $tag -----"
     set rxview {::ixNet::OBJ-/statistics/view:"Data Plane Port Statistics"}
 	set proview {::ixNet::OBJ-/statistics/view:"Global Protocol Statistics"}
     # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
-Deputs "view:$view"
-Deputs "rxview:$rxview"
-Deputs "proview:$proview"
+    Deputs "view:$view"
+    Deputs "rxview:$rxview"
+    Deputs "proview:$proview"
     set captionList             [ ixNet getA $view/page -columnCaptions ]
 	#set rxcaptionList [ ixNet getA $rxview/page -columnCaptions ]
     if { [catch { set rxcaptionList [ ixNet getA $rxview/page -columnCaptions ] } ]  } {
 	    set rxcaptionList [list Port {Rx Frames}]
 	} 
 	set proCaptionList [ ixNet getA $proview/page -columnCaptions ]
-Deputs "caption list:$captionList"
-Deputs "rxcaptionList:$rxcaptionList"
-Deputs "pro caption list:$proCaptionList"
+    Deputs "caption list:$captionList"
+    Deputs "rxcaptionList:$rxcaptionList"
+    Deputs "pro caption list:$proCaptionList"
 	set port_name				[ lsearch -exact $captionList {Stat Name} ]
     set tx_frame_count          [ lsearch -exact $captionList {Frames Tx.} ]
     set total_frame_count       [ lsearch -exact $captionList {Valid Frames Rx.} ]
@@ -1440,19 +1556,18 @@ Deputs "pro caption list:$proCaptionList"
 	}
 	set proStats [ ixNet getA $proview/page -rowValues ]
 	
-Deputs "stats:$stats"
-Deputs "pro stats:$proStats"
+    Deputs "stats:$stats"
+    Deputs "pro stats:$proStats"
 
     set connectionInfo [ ixNet getA $handle -connectionInfo ]
-Deputs "connectionInfo :$connectionInfo"
+    Deputs "connectionInfo :$connectionInfo"
     regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
-Deputs "chas:$chassis card:$card port$port"
+    Deputs "chas:$chassis card:$card port$port"
 
     foreach row $stats {
-        
         eval {set row} $row
-Deputs "row:$row"
-Deputs "portname:[ lindex $row $port_name ]"
+        Deputs "row:$row"
+        Deputs "portname:[ lindex $row $port_name ]"
 		if { [ string length $card ] == 1 } {
 			set card "0$card"
 		}
@@ -1644,22 +1759,22 @@ Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
 	    set statsItem   "arp_reply_tx"
-        set statsVal    [ lindex $row $ping_reply_tx ]
+        set statsVal    [ lindex $row $arp_reply_tx ]
 Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
         set statsItem   "arp_reply_rx"
-        set statsVal    [ lindex $row $ping_reply_rx ]
+        set statsVal    [ lindex $row $arp_reply_rx ]
 Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
         set statsItem   "arp_request_tx"
-        set statsVal    [ lindex $row $ping_request_tx ]
+        set statsVal    [ lindex $row $arp_request_tx ]
 Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
         set statsItem   "arp_request_rx"
-        set statsVal    [ lindex $row $ping_request_rx ]
+        set statsVal    [ lindex $row $arp_request_rx ]
 Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
@@ -1710,9 +1825,9 @@ Deputs "Args:$args "
 	foreach obj $allObj {
 		if { [ $obj isa Traffic ] } {
 			if { [ $obj cget -hPort ] == $handle } {
-Deputs "trafficObj: $obj; hport :$handle"
+                Deputs "trafficObj: $obj; hport :$handle"
 			    set objhandle [ $obj cget -handle]
-Deputs "$obj:$objhandle"
+                Deputs "$obj:$objhandle"
                 if {$objhandle != ""} {
 		
 				    lappend trafficObj $obj
@@ -1729,7 +1844,7 @@ Deputs "$obj:$objhandle"
 		set load_unit "PERCENT"
 	}
 	set unitLoad [ expr $stream_load / [ llength $trafficObj ].0 ]
-Deputs "unitLoad : $unitLoad"
+    Deputs "unitLoad : $unitLoad"
 	foreach obj $trafficObj {
 	
 		$obj config -stream_load $unitLoad -load_unit $load_unit 
@@ -1778,11 +1893,10 @@ Deputs "Args:$args "
 	foreach obj $allObj {
 		if { [ $obj isa Traffic ] } {
 			if { [ $obj cget -hPort ] == $handle } {
-Deputs "trafficObj: $obj; hport :$handle"
+                Deputs "trafficObj: $obj; hport :$handle"
 			    set objhandle [ $obj cget -handle]
-Deputs "$obj:$objhandle"
+                Deputs "$obj:$objhandle"
                 if {$objhandle != ""} {
-		
 				    lappend trafficObj $obj
 				}
 			}
@@ -1846,13 +1960,27 @@ class Host {
 	constructor { port } {}
 	method config { args } {}
 	method unconfig {} {
-    set tag "body Host::unconfig [info script]"
-Deputs "----- TAG: $tag -----"
+        set tag "body Host::unconfig [info script]"
+        Deputs "----- TAG: $tag -----"
 		set hPort ""
 		chain
 	}
-	method enable {} {}
-	method disable {} {}
+	method enable {} {
+        set tag "body Host::enable [info script]"
+    Deputs "----- TAG: $tag -----"
+        foreach int $handle {
+            ixNet setA $int -enabled true
+            ixNet commit
+        }
+    }
+	method disable {} {
+        set tag "body Host::disable [info script]"
+    Deputs "----- TAG: $tag -----"
+        foreach int $handle {
+            ixNet setA $int -enabled false
+            ixNet commit
+        }
+    }
 	method ping { args } {}
 	method reborn {} {
 		if { [ catch {
@@ -1867,6 +1995,7 @@ Deputs "----- TAG: $tag -----"
 	public variable portObj
 	public variable static
 	public variable ip_version
+    public variable hostInfo
 }
 
 body Host::constructor { port } {
@@ -1874,13 +2003,14 @@ body Host::constructor { port } {
 	
 	reborn
 	set handle ""
+    set hostInfo ""
 }
 
 body Host::config { args } {
     global errNumber
     
     set tag "body Host::config [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 	
 	if { $hPort == "" } {
 		reborn
@@ -1899,15 +2029,21 @@ Deputs "----- TAG: $tag -----"
 	set ipv6_gw			3ffe:3210::1
 	set ip_version		ipv4
 	set enabled 		True
-	set unconnected		0
+    set unconnected		0
 	set static 0
+    set enable_vlan true
 	
+    set hostInfo $args
+    
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
 			-enabled {
 				set  enabled $value
 			}
+            -enable_vlan {
+                set enable_vlan $value
+            }
             -count {
 				set count $value
             }
@@ -1929,6 +2065,9 @@ Deputs "----- TAG: $tag -----"
 			-outer_vlan_step {
 				set vlan_id1_step $value
             }
+            -vlan_pri1 {
+                set vlan_pri1 $value
+            }
             -vlan_id2 -
 			-inner_vlan_id {
 				set vlan_id2 $value
@@ -1936,6 +2075,23 @@ Deputs "----- TAG: $tag -----"
             -vlan_id2_step -
 			-inner_vlan_step {
 				set vlan_id2_step $value
+            }
+            -vlan_pri2 {
+                set vlan_pri2 $value
+            }
+            -ipaddr {
+                if { [IsIPv4Address $value] } {
+                    set ipv4_addr $value
+                } else {
+                    set ipv6_addr $value
+                }
+            }
+            -ipaddr_step {
+                if { [IsIPv4Address $value] } {
+                    set ipv4_addr_step $value
+                } else {
+                    set ipv6_addr_step $value
+                }
             }
             -ipv4_addr {
 				set ipv4_addr $value
@@ -1985,7 +2141,7 @@ Deputs "----- TAG: $tag -----"
 	if { [ info exists ipv4_gw_step ] } {
 		set gwPfxIncr	[ GetStepPrefixlen $ipv4_gw_step ]
 	}
-Deputs "pfxIncr:$pfxIncr"	
+    Deputs "pfxIncr:$pfxIncr"	
 	if { [ info exists static] == 0 } {
 		if { [ info exists ipv4_addr ] } {
 			set static 0
@@ -2029,35 +2185,85 @@ Deputs "pfxIncr:$pfxIncr"
 				} else {
 					set vlanIncrMode noIncrement
 				}
-				ixNet setM $handle -enableVlan True \
+				ixNet setM $handle -enableVlan $enable_vlan \
 					-enableIncrementVlan $enableVlanIncr \
 					-incremetVlanMode $vlanIncrMode
 				if { [ info exists vlan_id2 ] } {
-					ixNet setM $handle \
+					ixNet setM $handle/vlan \
 						-vlanCount 2 \
 						-vlanId "${vlan_id1},${vlan_id2}"
+                    ixNet commit
+                    
+                    if { [ info exists vlan_pri2 ] } {
+                        ixNet setA $handle/vlan -vlanPriority "${vlan_pri1},${vlan_pri2}"
+                        ixNet commit
+                    } else {
+                        ixNet setA $handle/vlan -vlanPriority "${vlan_pri1}"
+                        ixNet commit
+                    }
 				} else {
-					ixNet setM $handle \
+					ixNet setM $handle/vlan \
 						-vlanCount 1 \
 						-vlanId $vlan_id1
+                    ixNet commit
+                    if { [ info exists vlan_pri1 ] } {
+                        ixNet setA $handle/vlan -vlanPriority "${$vlan_pri1}"
+                        ixNet commit
+                    }
 				}
 			} 
 		}
 		ixNet commit
 	} else {
 		for { set index 0 } { $index < $count } { incr index } {
-			set int [ ixNet add $hPort interface ]
-			if { $unconnected } {
-Deputs "unconncted:$unconnected"
-Deputs "int:$int"		
-				ixNet setA $int -type routed
-			}
-			ixNet setA $int -description $this
-			ixNet commit
-			set int [ixNet remapIds $int]
-			lappend handle $int
+            set int ""
+            if { [llength $handle] == 0 } {
+                set tmpInt [lindex [ixNet getList $hPort interface] 0]
+                if { $tmpInt != "" } {
+                    if { [info exists ipv4_addr] && [info exists ipv6_addr] } {
+                        if { [llength [ ixNet getL $tmpInt ipv4 ]] == 0 && [llength [ ixNet getL $tmpInt ipv6 ]] == 0 } {
+                            set int $tmpInt
+                        } 
+                    } elseif { [info exists ipv4_addr] } {
+                        if { [llength [ ixNet getL $tmpInt ipv4 ]] == 0 } {
+                            set int $tmpInt
+                        } 
+                    } elseif { [info exists ipv6_addr] } {
+                        if { [llength [ ixNet getL $tmpInt ipv6 ]] == 0 } {
+                            set int $tmpInt
+                        }
+                    }
+                }
+            } else {
+                set int [lindex $handle $index]
+            }
+            #set int [lindex [ixNet getList $hPort interface] $index]
+            #if { $int != "" } {
+            #    if { [llength [ ixNet getL $int ipv4 ]] != 0 } {
+            #        set int [ ixNet add $hPort interface ]
+            #    }
+            #} else {
+            #    set int [ ixNet add $hPort interface ]
+            #}
+            if { $int == "" } {
+                set int [ ixNet add $hPort interface ]
 
-	Deputs "int:$int"	
+            }
+            if { $unconnected } {
+                Deputs "unconncted:$unconnected"
+                Deputs "int:$int"		
+                ixNet setA $int -type routed
+            }
+
+			ixNet setA $int -description $this
+            ixNet commit
+            set int [ixNet remapIds $int]
+            
+            if { [lsearch $handle $int ] == -1 } {
+                lappend handle $int
+            }
+
+            Deputs "int:$int"	
 			if { [ info exists ipv4_addr ] } {
 				if { [ llength [ ixNet getL $int ipv4 ] ] == 0 } {
 					ixNet add $int ipv4
@@ -2068,7 +2274,7 @@ Deputs "int:$int"
 					-gateway $ipv4_gw \
 					-maskWidth $ipv4_prefix_len
 				ixNet commit
-	Deputs "Step10"			
+                Deputs "Step10"			
 				if { $pfxIncr > 0 } {
 					set ipv4_addr [ IncrementIPAddr $ipv4_addr $pfxIncr ]
 				}
@@ -2097,49 +2303,41 @@ Deputs "int:$int"
 				}
 	Deputs "ipv6 addr incr: $ipv6_addr"			
 			}
-Deputs "config mac"
+            Deputs "config mac"
 			if { [ info exists src_mac ] } {
 				ixNet setM $int/ethernet \
 						-macAddress $src_mac 
 				ixNet commit
 				set src_mac [ IncrMacAddr $src_mac $src_mac_step ]
 			}
-Deputs "config vlan1"
+            Deputs "config vlan1"
 			if { [ info exists vlan_id1 ] } {
-				set vlanId	$vlan_id1
-				
 				ixNet setM $int/vlan \
 					-count 1 \
-					-vlanEnable True \
-					-vlanId $vlanId
+					-vlanEnable $enable_vlan \
+					-vlanId $vlan_id1
 				ixNet commit
-				incr vlan_id1 $vlan_id1_step
+                
+                Deputs "config vlan2"
+                if { [ info exists vlan_id2 ] } {
+                    set vlanId	"${vlan_id1},${vlan_id2}"
+                
+                    ixNet setM $int/vlan \
+                        -count 2 \
+                        -vlanEnable $enable_vlan \
+                        -vlanId $vlanId
+                    ixNet commit
+                    incr vlan_id2 $vlan_id2_step
+                }
+                incr vlan_id1 $vlan_id1_step
 			}
 			
-Deputs "config vlan2"
-			if { [ info exists vlan_id2 ] } {
-				set vlanId	$vlan_id2
-
-				set vlanId1	[ ixNet getA $int/vlan -vlanId ]
-				set vlanId	"${vlanId1},${vlanId}"
-			
-				ixNet setM $int/vlan \
-					-count 2 \
-					-vlanEnable True \
-					-vlanId $vlanId
-				ixNet commit
-				incr vlan_id2 $vlan_id2_step
-			}
-			
-Deputs "enable interface"
+            Deputs "enable interface"
 			if { [ info exists enabled ] } {
 				ixNet setA $int -enabled $enabled
 				ixNet commit			
 			}
-		}
-		
-
-		
+		}	
 	}
 	
 	Deputs "static $static"
@@ -2148,7 +2346,7 @@ Deputs "enable interface"
 
 body Host::ping { args } {
     set tag "body Host::ping [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
 	global errNumber
 
@@ -2156,8 +2354,8 @@ Deputs "----- TAG: $tag -----"
 	set interval 	1000
 	set flag 		1
 
-#param collection
-Deputs "Args:$args "
+    #param collection
+    Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {

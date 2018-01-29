@@ -6,6 +6,8 @@
 # Change made
 # Version 1.0 
 #       1. Create
+# Version 1.1
+#       2. add unconfig
 
 
 class PppoeHost {
@@ -17,37 +19,66 @@ class PppoeHost {
 	public variable rangeStats
 	public variable hostCnt
 	public variable hPppox
+     
     
     constructor { port } { chain $port } {}
 	method reborn {} {}
 	method config { args } {}
+	method connect { } { start }
+	method disconnect { } { stop }
 	method get_summary_stats {} {}
+    method unconfig {} {
+        set tag "body PppoeHost::unconfig [info script]"
+		Deputs "----- TAG: $tag -----"		
+		catch {
+		    
+			# set ptemp [ixNet getL $hPort/protocols/bgp neighborRange]
+			# Deputs "$ptemp"
+			# if {[llength $ptemp] == 1 } {
+			    # set temphandle $hPort
+			    # chain
+			    # Deputs "disable $temphandle bgp protocol"
+				# ixNet setA $temphandle/protocols/bgp -enabled false
+				# ixNet commit
+			# } else {
+			    # chain
+			# }
+            chain
+            if {[ixNet getL $hPppox range] == ""} {
+                ixNet remove $stack
+                ixNet commit
+            }
+            
+		}
+    }
+    method igmp_over_pppoe {} {}
 	method wait_connect_complete { args } {}
+	method wait_disconnect_complete {} {}
     method CreatePPPoEPerSessionView {} {
-        set tag "body DhcpHost::CreateDhcpPerSessionView [info script]"
-Deputs "----- TAG: $tag -----"
+        set tag "body PppoeHost::CreateDhcpPerSessionView [info script]"
+		Deputs "----- TAG: $tag -----"
         set root [ixNet getRoot]
         set customView          [ ixNet add $root/statistics view ]
         ixNet setM  $customView -caption "dhcpPerSessionView" -type layer23ProtocolStack -visible true
         ixNet commit
         set customView          [ ixNet remapIds $customView ]
-Deputs "view:$customView"
+        Deputs "view:$customView"
         set availableFilter     [ ixNet getList $customView availableProtocolStackFilter ]
-Deputs "available filter:$availableFilter"
+        Deputs "available filter:$availableFilter"
         set filter              [ ixNet getList $customView layer23ProtocolStackFilter ]
-Deputs "filter:$filter"
-Deputs "handle:$handle"
+        Deputs "filter:$filter"
+        Deputs "handle:$handle"
         set pppoxRange [ixNet getList $handle pppoxRange]
-Deputs "pppoxRange:$pppoxRange"
+        Deputs "pppoxRange:$pppoxRange"
         set rangeName [ ixNet getA $pppoxRange -name ]
-Deputs "range name:$rangeName"
+        Deputs "range name:$rangeName"
         foreach afil $availableFilter {
-Deputs "$afil"
+	    Deputs "$afil"
             if { [ regexp $rangeName $afil ] } {
                 set stackFilter $afil
             }
         }
-Deputs "stack filter:$stackFilter"
+        Deputs "stack filter:$stackFilter"
         ixNet setM $filter -drilldownType perSession -protocolStackFilterId [ list $stackFilter ]
         ixNet commit
         set srtStat [lindex [ixNet getF $customView statistic -caption {Session Name}] 0]
@@ -63,17 +94,52 @@ Deputs "stack filter:$stackFilter"
     
     
 }
+body PppoeHost::igmp_over_pppoe {} {
+    set tag "body PppoeHost::igmp_over_pppoe [info script]"
+    Deputs "----- TAG: $tag -----"
+    set igmp_name igmp_[clock seconds]
+    IgmpOverPppoeHost $igmp_name $this
+    
+    return PppoeHost::$igmp_name
+}
+body PppoeHost::wait_disconnect_complete {} {
+    set tag "body PppoeHost::wait_disconnect_complete [info script]"
+    Deputs "----- TAG: $tag -----"
+
+    set timeout 300
+    return [GetStandardReturnHeader]
+}
 
 body PppoeHost::reborn {} {
     
 	set tag "body PppoeHost::reborn [info script]"
-	Deputs "----- TAG: $tag -----"
-		
-	chain 
-      
+	Deputs "----- TAG: $tag -----"	
+    
+    set flag 1
+	set sg_ethernet_list [ixNet getL $hPort/protocolStack ethernet]
+	foreach sg_ethernet $sg_ethernet_list {
+	    set sg_pppoxEndpoint [ixNet getL $sg_ethernet pppoxEndpoint]
+		if {$sg_pppoxEndpoint != ""} {
+		    set flag 0
+            set stack $sg_ethernet
+           
+		    break
+		}
+	}
+	
+	if { $flag } {
+		chain
+		set sg_ethernet $stack
+	}
+    Deputs "stack: $stack"
 	set sg_ethernet $stack
-    #-- add dhcp endpoint stack
-    set sg_pppoxEndpoint [ixNet add $sg_ethernet pppoxEndpoint]
+    #-- add pppox endpoint stack
+    if { [llength [ixNet getL $stack pppoxEndpoint]] > 0 } {
+        set sg_pppoxEndpoint [lindex [ixNet getL $stack pppoxEndpoint] 0]
+    } else {
+        set sg_pppoxEndpoint [ixNet add $sg_ethernet pppoxEndpoint]
+    }
+    Deputs "sg_pppoxEndpoint: $sg_pppoxEndpoint"
     ixNet setA $sg_pppoxEndpoint -name $this
     ixNet commit
     set sg_pppoxEndpoint [lindex [ixNet remapIds $sg_pppoxEndpoint] 0]
@@ -116,11 +182,15 @@ body PppoeHost::config { args } {
     set ENcp       [ list ipv4 ipv6 ipv4v6 ]
     set EAuth      [ list none auto chap_md5 pap ]
 
-#param collection
-Deputs "Args:$args "
+	#param collection
+	Deputs "Args:$args "
     foreach { key value } $args {
         set key [string tolower $key]
         switch -exact -- $key {
+			-mru_size {
+				set mru_size $value
+			}
+            -session_num -
             -count {
                 if { [ string is integer $value ] } {
                     set count $value
@@ -171,6 +241,11 @@ Deputs "Args:$args "
 		 -numSessions $count
 	}
 	
+	if { [ info exists mru_size ] } {
+		ixNet setMultiAttrs $handle/pppoxRange \
+		 -mtu $mru_size
+	}
+	
 	if { [ info exists ipcp_encap ] } {
 		switch $ipcp_encap {
 			ipv4 {
@@ -191,6 +266,16 @@ Deputs "Args:$args "
 		switch $authentication {
 			auto {
 				set authentication papOrChap
+                if { [ info exists user_name ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -chapName $user_name  \
+					 -papUser $user_name
+				}
+				if { [ info exists password ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -chapSecret $password  \
+					 -papPassword $password
+				}
 			}
 			chap_md5 {
 				set authentication chap
@@ -201,6 +286,17 @@ Deputs "Args:$args "
 				if { [ info exists password ] } {
 					ixNet setMultiAttrs $handle/pppoxRange \
 					 -chapSecret $password
+				}			
+			}
+            pap {
+				set authentication pap
+				if { [ info exists user_name ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -papUser $user_name
+				}
+				if { [ info exists password ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -papPassword $password
 				}			
 			}
 			
@@ -225,83 +321,76 @@ Deputs "Args:$args "
 			ixNet commit
 		}
 	}
-	
-	
 
 	ixNet commit
 	return [GetStandardReturnHeader]
-
 }
 
 body PppoeHost::get_summary_stats {} {
-
     set tag "body PppoeHost::get_summary_stats [info script]"
-Deputs "----- TAG: $tag -----"
-        
-# 统计项
-# attempted_count
-# avg_success_transaction_count
-# connected_success_count
-# disconnected_success_count
-# failed_connect_count
-# failed_disconnect_count
-# max_setup_time
-# min_setup_time
-# retry_count
-# rx_chap_count
-# rx_ipcp_count
-# rx_ipv6cp_count
-# rx_lcp_config_ack_count
-# rx_lcp_config_nak_count
-# rx_lcp_config_reject_count
-# rx_lcp_config_request_count
-# rx_lcp_echo_reply_count
-# rx_lcp_echo_request_count
-# rx_lcp_term_ack_count
-# rx_lcp_term_request_count
-# rx_pap_count
-# hosts
-# success_setup_rate
-# hosts_up
-# tx_chap_count
-# tx_ipcp_count
-# tx_ipv6cp_count
-# tx_lcp_config_ack_count
-# tx_lcp_config_nak_count
-# tx_lcp_config_reject_count
-# tx_lcp_config_request_count
-# tx_lcp_echo_reply_count
-# tx_lcp_echo_request_count
-# tx_lcp_term_ack_count
-# tx_lcp_term_request_count
-# tx_pap_count
+    Deputs "----- TAG: $tag -----"
+            
+    # 统计项
+    # attempted_count
+    # avg_success_transaction_count
+    # connected_success_count
+    # disconnected_success_count
+    # failed_connect_count
+    # failed_disconnect_count
+    # max_setup_time
+    # min_setup_time
+    # retry_count
+    # rx_chap_count
+    # rx_ipcp_count
+    # rx_ipv6cp_count
+    # rx_lcp_config_ack_count
+    # rx_lcp_config_nak_count
+    # rx_lcp_config_reject_count
+    # rx_lcp_config_request_count
+    # rx_lcp_echo_reply_count
+    # rx_lcp_echo_request_count
+    # rx_lcp_term_ack_count
+    # rx_lcp_term_request_count
+    # rx_pap_count
+    # hosts
+    # success_setup_rate
+    # hosts_up
+    # tx_chap_count
+    # tx_ipcp_count
+    # tx_ipv6cp_count
+    # tx_lcp_config_ack_count
+    # tx_lcp_config_nak_count
+    # tx_lcp_config_reject_count
+    # tx_lcp_config_request_count
+    # tx_lcp_echo_reply_count
+    # tx_lcp_echo_request_count
+    # tx_lcp_term_ack_count
+    # tx_lcp_term_request_count
+    # tx_pap_count
 
     set root [ixNet getRoot]
 	set view {::ixNet::OBJ-/statistics/view:"PPP General Statistics"}
     # set view  [ ixNet getF $root/statistics view -caption "Port Statistics" ]
-Deputs "view:$view"
+    Deputs "view:$view"
     set captionList             [ ixNet getA $view/page -columnCaptions ]
-Deputs "caption list:$captionList"
+    Deputs "caption list:$captionList"
 	set port_name				[ lsearch -exact $captionList {Stat Name} ]
     set attempted_count          [ lsearch -exact $captionList {Sessions Initiated} ]
     set connected_success_count          [ lsearch -exact $captionList {Sessions Succeeded} ]
-
-	
     set ret [ GetStandardReturnHeader ]
 	
     set stats [ ixNet getA $view/page -rowValues ]
-Deputs "stats:$stats"
+    Deputs "stats:$stats"
 
     set connectionInfo [ ixNet getA $hPort -connectionInfo ]
-Deputs "connectionInfo :$connectionInfo"
+    Deputs "connectionInfo :$connectionInfo"
     regexp -nocase {chassis=\"([0-9\.]+)\" card=\"([0-9\.]+)\" port=\"([0-9\.]+)\"} $connectionInfo match chassis card port
-Deputs "chas:$chassis card:$card port$port"
+    Deputs "chas:$chassis card:$card port$port"
 
-    foreach row $stats {
-        
+    foreach row $stats {    
         eval {set row} $row
-Deputs "row:$row"
-Deputs "portname:[ lindex $row $port_name ]"
+        Deputs "row:$row"
+        Deputs "portname:[ lindex $row $port_name ]"
 		if { [ string length $card ] == 1 } {
 			set card "0$card"
 		}
@@ -314,28 +403,26 @@ Deputs "portname:[ lindex $row $port_name ]"
 
         set statsItem   "attempted_count"
         set statsVal    [ lindex $row $attempted_count ]
-Deputs "stats val:$statsVal"
+        Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
           
               
         set statsItem   "connected_success_count"
         set statsVal    [ lindex $row $connected_success_count ]
-Deputs "stats val:$statsVal"
+        Deputs "stats val:$statsVal"
         set ret $ret[ GetStandardReturnBody $statsItem $statsVal ]
 			  
 
-Deputs "ret:$ret"
+        Deputs "ret:$ret"
 
     }
         
     return $ret
-
-	
 }
 
 body PppoeHost::wait_connect_complete { args } {
     set tag "body PppoeHost::wait_connect_complete [info script]"
-Deputs "----- TAG: $tag -----"
+    Deputs "----- TAG: $tag -----"
 
 	set timeout 300
 
@@ -365,7 +452,7 @@ Deputs "----- TAG: $tag -----"
 		set stats [ get_summary_stats ]
 		set initStats [ GetStatsFromReturn $stats attempted_count ]
 		set succStats [ GetStatsFromReturn $stats connected_success_count ]
-Deputs "initStats:$initStats == succStats:$succStats ?"		
+        Deputs "initStats:$initStats == succStats:$succStats ?"		
 		if { $succStats != "" && $succStats >= $initStats && $initStats > 0 } {
 			break	
 		}
@@ -374,7 +461,6 @@ Deputs "initStats:$initStats == succStats:$succStats ?"
 	}
 	
 	return [GetStandardReturnHeader]
-
 }
 # =============
 # ethernet

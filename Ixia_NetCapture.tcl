@@ -47,13 +47,18 @@ class Capture {
     #--public method
     constructor { port } {
 		set tag "body Capture::ctor [info script]"
-	Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		set portObj $port
+        
+        set chassisIp ""
+        set portList [list ]
+        set captureStart false
+        
 		reborn
 	}
 	method reborn {} {
 		set tag "body Capture::reborn [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		if { [ catch {
 			set hPort [ $portObj cget -handle ]
 		} ] } {
@@ -62,7 +67,7 @@ Deputs "----- TAG: $tag -----"
 		} 
 		set content  [list]
 		set handle $hPort/capture
-Deputs "handle:$handle"		
+        Deputs "handle:$handle"		
 	}
     method config { args } {}
     method get_content { args } {}
@@ -70,23 +75,23 @@ Deputs "handle:$handle"
 	method packet_content { args } {}
     method unconfig {} {
 		set tag "body Capture::unconfig [info script]"
-Deputs "----- TAG: $tag -----"
-#	set flag [ ixNet getA $hPort/capture -hardwareEnabled ]
-#    	ixNet setA $hPort/capture -hardwareEnabled true
-#    	ixNet commit
-Deputs "handle:$handle portObj:$portObj"
+        Deputs "----- TAG: $tag -----"
+        #	set flag [ ixNet getA $hPort/capture -hardwareEnabled ]
+        #    	ixNet setA $hPort/capture -hardwareEnabled true
+        #    	ixNet commit
+        Deputs "handle:$handle portObj:$portObj"
 		if { $handle == "" } { reborn }
     	CleanFilter
 		set handle ""
-#    	ixNet setA $hPort/capture -hardwareEnabled $flag
-#    	ixNet commit
+        #    	ixNet setA $hPort/capture -hardwareEnabled $flag
+        #    	ixNet commit
     	#return [ GetErrorReturnHeader "flag:$flag" ]
 	return [ GetStandardReturnHeader ]
     }
     method CleanFilter {} {
 		set tag "body Capture::CleanFilter [info script]"
-Deputs "----- TAG: $tag -----"
-Deputs "hPort:$hPort"		
+        Deputs "----- TAG: $tag -----"
+        Deputs "hPort:$hPort"		
 		if { [ catch {
 			ixNet setM $handle/filter \
 				-captureFilterDA anyAddr \
@@ -108,27 +113,26 @@ Deputs "hPort:$hPort"
 
 			ixNet commit
 		} err ] } {
-Deputs "err:$err"
+            Deputs "err:$err"
 		}
     }
 	
 	method GetAllContent {} {
-	
 		set tag "body Capture::GetAllContent [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		
 		set content  [list]
 
 		set portInfo [ixNet getA $hPort -connectionInfo]
- #--chassis="10.137.144.57" card="9" port="3" portip="10.0.9.3"
+        #--chassis="10.137.144.57" card="9" port="3" portip="10.0.9.3"
 		regexp {chassis=([0-9\.\"]+) card=([\"0-9]+) port=([\"0-9]+)} $portInfo match chas card port
-Deputs "chas:$chas card:$card port:$port"
-# Deputs "release port:$hPort"
+        Deputs "chas:$chas card:$card port:$port"
+        # Deputs "release port:$hPort"
 		# ixNet exec releasePort $hPort
         
         # set timeout 10
         # while { [ ixNet getA $hPort -isAvailable ] } {
-# Deputs "Port connect state:[ ixNet getA $hPort -isAvailable ]"
+        # Deputs "Port connect state:[ ixNet getA $hPort -isAvailable ]"
             # incr timeout -1
             # after 1000
             # if { !$timeout } {
@@ -137,21 +141,21 @@ Deputs "chas:$chas card:$card port:$port"
         # }
 
 		set rsConnectToOS [ ixConnectToChassis $chas ]
-Deputs "result connecting to OS:$rsConnectToOS"
+        Deputs "result connecting to OS:$rsConnectToOS"
 		set chasId	[ chassis cget -id ]
-Deputs "capture get on $chasId $card $port"
+        Deputs "capture get on $chasId $card $port"
 		
 		set readPortRes [ eval port get $chasId $card $port ]
-Deputs "read port result:$readPortRes"		
+        Deputs "read port result:$readPortRes"		
 		set owner [port cget -owner]
-Deputs "owner:$owner"		
+        Deputs "owner:$owner"		
 
 		# Login before taking ownership
 		ixLogin $owner
 		# Take ownership of the ports we¡¯ll use
 		set portList [ list [ eval list $chasId $card $port ] ]
 Deputs "portList:$portList"		
-		ixTakeOwnership $portList
+		#ixTakeOwnership $portList
 
 		set rsGetCap [ eval capture get $chasId $card $port ]
 Deputs "result get capture: $rsGetCap"
@@ -201,19 +205,30 @@ Deputs "pkt count:$pktCnt"
     
 	method start {} {
 		set tag "body Capture::start [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		if { $handle == "" } { reborn }
+        
+        if { ![ ixNet getA $hPort/capture -hardwareEnabled ] } {
+            ixNet setA $hPort/capture  -hardwareEnabled True
+            ixNet commit
+        }
+		if { [ ixNet getA $hPort -rxMode ] != "captureAndMeasure" && [ ixNet getA $hPort -rxMode ] != "capture" } {
+            ixNet setA $hPort -rxMode capture
+            ixNet commit
+		}
+        
 		ixNet exec start $handle
 		set content  [list]
 		return [ GetStandardReturnHeader ]
 	}
 	method stop {} {
 		set tag "body Capture::stop [info script]"
-Deputs "----- TAG: $tag -----"
+        Deputs "----- TAG: $tag -----"
 		if { $handle == "" } { reborn }
 		ixNet exec stop $handle
 		return [ GetStandardReturnHeader ]
 	}
+    method save { args } {}
 	method enable {} {
 		set tag "body Capture::enable [info script]"
 Deputs "----- TAG: $tag -----"
@@ -230,13 +245,21 @@ Deputs "----- TAG: $tag -----"
 		ixNet commit
 		return [ GetStandardReturnHeader ]
 	}
+	method start_hal_capture { args } {}
+	method stop_hal_capture { } {}
+	method save_hal_capture { args } {}
+	method update_info { } {}
+    
 	public variable portObj
     public variable hPort
     public variable filter
     public variable capfile
     public variable contentProMap
-	
 	public variable content
+    
+    public variable chassisIp
+    public variable portList
+    public variable captureStart
 }
 
 body Capture::config { args } {
@@ -244,9 +267,9 @@ body Capture::config { args } {
     global errNumber
     
     set tag "body Capture::config [info script]"
-Deputs "----- TAG: $tag -----"
-#param collection
-Deputs "Args:$args "
+    Deputs "----- TAG: $tag -----"
+    #param collection
+    Deputs "Args:$args "
 	
 	if { $handle == "" } { reborn }
 
@@ -764,3 +787,302 @@ Deputs "content:$content"
 	
 }
 
+
+# #######################################
+# Start Hal Capture
+#
+# Parameters: |key, value|
+#       - mode: Capture mode, 0:capture all, 1:capture trig, 2:capture bad
+# Return:
+#        0 if got success
+#        raise error if failed 
+# 
+body Capture::start_hal_capture { args } {
+	set tag "proc start_capture [info script]"
+	Deputs "----- TAG: $tag -----"
+	
+	# Param collection --
+	set mode 0
+	foreach { key value } $args {
+		set key [string tolower $key]
+		Deputs "config $key---$value"
+		switch -exact -- $key {
+			-mode {
+				set mode $value
+			}
+		}
+	}
+	
+    stop_capture
+	set timeout 0
+	while { 1 } {
+		# -- check capture status every 2 sec
+		if { [ ixStartCapture portList ] == 0 } {
+			break
+		}
+
+		# Timeout but capture not start
+		if { $timeout > 30 } {
+			Deputs "Could not start capture"
+			error "Could not start capture"
+		}
+		incr timeout
+		after 2000
+	}
+
+	set captureStart true
+}
+
+# #######################################
+# Stop Hal Capture
+#
+#
+# Return:
+#        0 if got success
+#        raise error if failed 
+# #######################################
+body Capture::stop_hal_capture { } {
+	set tag "proc stop_capture [info script]"
+	Deputs "----- TAG: $tag -----"
+	
+	if { $captureStart } {
+		if { [ ixStopCapture portList ] != 0 } {
+			Deputs "Could not stop capture"
+		}
+	}
+	set captureStart false
+}
+
+# ######################################
+# Save Hal capture
+# Parameters: |key, value|
+#       - prefix: Save capture file name's prefix
+#       - resultDir: Result path
+#       - user: Share server user
+#       - password: Share server password
+#       - pcap2xml: Convert pcap file to xml 
+#       - keep_pcap: Keep enc file in local PC
+#       -filters: Filters to get packates matched the condition, eg. -Y ip.version==4 -e ip.version
+# Return:
+#        0 if got success
+#        raise error if failed 
+# ######################################  
+body Capture::save_hal_capture { args } {
+	set tag "proc save_capture [info script]"
+	Deputs "----- TAG: $tag -----"
+	
+	# Param collection --
+	set result_dir ""
+	set pcap2xml false
+	set keep_pcap true
+	set prefix "Ixia"
+	foreach { key value } $args {
+		set key [string tolower $key]
+		Deputs "config $key---$value"
+		switch -exact -- $key {
+			-result_dir {
+				set result_dir $value
+			}
+			-prefix {
+				set prefix $value
+			}
+			-user {
+				set user $value
+			}
+			-password {
+				set password $value
+			}
+			-pcap2xml {
+				set pcap2xml $value
+			}
+			-keep_pcap {
+				set keep_pcap $value
+			}
+            -filters {
+                set filters $value
+            }
+		}
+	}
+	
+	Deputs "----- Results location: $result_dir -----"
+	foreach port $portList {
+		set chassisId [ lindex $port 0 ]
+		set cardIndex [ lindex $port 1 ]
+		set portIndex [ lindex $port 2 ]
+		if { [ capture get $chassisId $cardIndex $portIndex ] } {
+			Deputs "Get capture from $chassisId $cardIndex $portIndex failed..."
+			error "Get capture from $chassisId $cardIndex $portIndex failed..."
+		}
+		set PktCnt 0
+		catch { set PktCnt [capture cget -nPackets] }
+		Deputs "Total $PktCnt packets captured"
+		
+		if { $PktCnt == 0 } {
+			continue
+		}
+		#Get all the packet from Chassis to pc.
+		if { [ captureBuffer get $chassisId $cardIndex $portIndex 1 $PktCnt ] } {
+			Deputs "Retrieve packets from $chassisId $cardIndex $portIndex failed..."
+			error "Retrieve packets from $chassisId $cardIndex $portIndex failed..." 
+		}
+		
+		if { [ captureBuffer export C:/Windows/Temp/${prefix}_${chassisId}_${cardIndex}_${portIndex}.enc capExportSniffer4x ] != 0 } {
+			Deputs "Could not save capture"
+			error "Could not save capture"
+		} else {
+			if { [ catch {
+				#exec cmd "/k net use \\$chassisIp\Temp /del /y" &
+				if { [ info exists user ] && [ info exists password ] } {
+					catch { exec cmd "/k net use \\$chassisIp\Temp $password /user:$user" & }
+				} else {
+					catch { exec cmd "/k net use \\$chassisIp\Temp" & }
+				}
+				
+                puts "file copy -force \\\\$chassisIp\\Temp\\${prefix}_${chassisId}_${cardIndex}_${portIndex}.enc $result_dir"
+				eval "file copy -force \\\\$chassisIp\\Temp\\${prefix}_${chassisId}_${cardIndex}_${portIndex}.enc $result_dir"
+				set enc [ file join $result_dir ${prefix}_${chassisId}_${cardIndex}_${portIndex}.enc ]
+				if { $pcap2xml } {
+					set xml [ file join $result_dir ${prefix}_${chassisId}_${cardIndex}_${portIndex}.xml ]
+					exec tshark.exe -r $enc -T pdml > $xml
+				}
+				
+				if { !$keep_pcap } {
+					file delete -force $enc
+				}
+                
+                if { [ info exists filters] } {
+					set txt [ file join $result_dir ${prefix}_${chassisId}_${cardIndex}_${portIndex}.txt ]
+					eval "exec tshark.exe -r $enc -T fields $filters > $txt"
+                }
+			} err ] } {
+				Deputs "Failed to transfer capture file: $err"
+				error "Failed to transfer capture file: $err"
+			}
+		}
+	}
+}
+
+body Capture::update_info { } {
+	# Update Hal information to start capture
+    set root [ixNet getRoot]
+    if { $chassisIp == "" } {
+        set availableHardware [ lindex [ ixNet getL $root availableHardware ] 0 ]
+        set chassis [ lindex [ ixNet getL $availableHardware chassis ] 0 ]
+        set chassisIp [ ixNet getA $chassis -ip ]
+    }
+	
+    if { [ ixConnectToTclServer $chassisIp ] } {
+        Deputs "Failed to connect Tcl Server: $chassisIp:4555"
+        error "Failed to connect Tcl Server: $chassisIp:4555"
+    }
+    
+    if { [ ixConnectToChassis $chassisIp ] } {
+        Deputs "Failed to connect Chassis: $chassisIp"
+        error "Failed to connect Chassis: $chassisIp"
+    }
+    
+    if { [ llength $portList ] == 0 } { 
+		set p [ $portObj cget -handle ]
+        set info [ ixNet getA $p -connectionInfo ]
+        regexp {card="(\d+)"} $info card cardId
+        regexp {port="(\d+)"} $info port portId
+        chassis get $chassisIp
+        set chassisId [ chassis get -id ]
+        lappend portList [ list $chassisId $cardId $portId ]   
+	}
+    foreach p $portList {
+        set chassisId [ lindex $p 0 ]
+        set cardIndex [ lindex $p 1 ]
+        set portIndex [ lindex $p 2 ]
+        eval port get $chassisId $cardIndex $portIndex
+        set owner [ eval port cget -owner ]
+        if { $owner != "" } {
+            ixLogin $owner
+            break
+        }
+    }
+}
+
+# ######################################
+# Save capture
+# Parameters: |key, value|
+#       - result_dir: Directory which we'll put the capture files
+#       - suffix: Suffix name appended to capture file name
+#       - pcap2xml: If we set xml, we'll convert pcap file to xml under capture_dir.  
+#       - keep_pcap: Keep cap file in local PC
+#       - filters: Filters to get packates matched the condition, eg. -Y ip.version==4 -e ip.version
+# Return:
+#        0 if got success
+#        raise error if failed 
+# ######################################  
+body Capture::save { args } {
+	set tag "proc save $args [info script]"
+	Deputs "----- TAG: $tag -----"
+	
+	# Param collection --
+	set capture_dir [ pwd ]
+	set pcap2xml false
+	set keep_pcap true
+	set suffix ""
+	foreach { key value } $args {
+		set key [string tolower $key]
+		Deputs "config $key---$value"
+		switch -exact -- $key {
+			-result_dir {
+				set capture_dir $value
+			}
+			-suffix {
+				set prefix $value
+			}
+			-pcap2xml {
+				set pcap2xml $value
+			}
+			-keep_pcap {
+				set keep_pcap $value
+			}
+            -filters {
+                set filters $value
+            }
+		}
+	}
+	
+    if { [ catch {
+        Tester::save_capture -capture_dir $capture_dir -suffix $suffix
+        
+        set captureFullPath ""
+        set portName [ ixNet getA $hPort -name ]
+        if { [ string range $portName 0 1 ] == "::" } {
+            set captureFileName [ string range $portName 2 end ]
+        }
+        set waitCaptureToSave 60000
+        while { $waitCaptureToSave > 0 } {
+            set captureFullPath [ GetFileFromDir $capture_dir $captureFileName ]
+            if { $captureFullPath != "" } {
+                if { ![ file exists $captureFullPath ] } {
+                    set captureFullPath [ file join $capture_dir $captureFullPath ]
+                }
+                break
+            }
+            incr waitCaptureToSave -2000
+        }
+
+        if { $captureFullPath == "" } {
+            error "No capture file found!!!"
+        }
+        if { $pcap2xml } {
+            set xml $captureFullPath.xml
+            exec tshark.exe -r $captureFullPath -T pdml > $xml
+        }
+        
+        if { [ info exists filters] } {
+            set txt $captureFullPath.txt
+            eval "exec tshark.exe -r $captureFullPath -T fields $filters > $txt"
+        }
+        
+        if { !$keep_pcap } {
+            file delete -force $captureFullPath
+        }
+    } err ] } {
+        error "Failed to analyze capture file: $err"
+    }
+}

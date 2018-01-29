@@ -54,7 +54,6 @@ proc loadconfig { filename } {
 }
 
 proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
-
 	global ixN_tcl_v
 	global loginInfo
     
@@ -64,8 +63,8 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
     global trafficnamelist
     global tportlist
     
-	global server
-	global serverPort
+	global remote_server
+	global remote_serverPort
 	
 	set loginInfo $location
 
@@ -76,11 +75,11 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
 	}
 
 	set portInfo [ split $port "/" ]
-	set server	 [ lindex $portInfo 0 ]
-	if { [ regexp {\d+\.\d+\.\d+\.\d+} $server ] || ( $server == "localhost" ) } {
+	set remote_server	 [ lindex $portInfo 0 ]
+	if { [ regexp {\d+\.\d+\.\d+\.\d+} $remote_server ] || ( $remote_server == "localhost" ) } {
 		set portInfo [ lreplace $portInfo 0 0 ]
 	} else {
-		set server localhost
+		set remote_server localhost
 	}
 	if { [ llength $portInfo ] == 0 } {
 		set portInfo 8009
@@ -89,12 +88,12 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
     set flag 0
 	foreach port $portInfo {
 		ixNet disconnect
-		ixNet connect $server -version $ixN_tcl_v -port $port
+		ixNet connect $remote_server -version $ixN_tcl_v -port $port
 		set root [ ixNet getRoot]
 		if { $force } {
 			
 			#return	
-			set serverPort $port
+			set remote_serverPort $port
             set flag 1            
 		} else {
 			if { [ llength [ ixNet getL $root vport ] ] > 0 } {
@@ -103,7 +102,7 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
 			} else {
 				
 				#return
-				set serverPort $port
+				set remote_serverPort $port
                 set flag 1
 			}
 		}
