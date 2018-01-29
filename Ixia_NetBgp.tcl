@@ -16,13 +16,15 @@
 class BgpSession {
     inherit RouterEmulationObject
     public variable ip_version
-       
+    public variable ipv4_addr
+
     constructor { port {version ipv4} } {
 		set tag "body BgpSession::ctor [info script]"
         Deputs "----- TAG: $tag -----"
 		set portObj [ GetObject $port ]
 		set handle ""
         set ip_version $version
+		set routeBlock(obj) [list]
 		# reborn
 	}
 
@@ -51,10 +53,7 @@ body BgpSession::reborn {} {
     }		
     
     ixNet setA $hPort/protocols/bgp -enabled True
-    set usedInterfaces [list ]
-    foreach nei [ ixNet getL $hPort/protocols/bgp neighborRange ] {
-        lappend usedInterfaces [ixNet getA $nei -interfaces]
-    }
+        
     #-- add bgp protocol
     set handle [ ixNet add $hPort/protocols/bgp neighborRange ]
     if { $ip_version == "ipv6" } {
@@ -72,9 +71,6 @@ body BgpSession::reborn {} {
     
     #-- add interface
     set interface [ ixNet getL $hPort interface ]
-    if { [llength $usedInterfaces] == [llength $interface] } {
-        set interface [list ]
-    }
     if { [ llength $interface ] == 0 } {
         set interface [ ixNet add $hPort interface ]
         if { $ip_version == "ipv4" } {
@@ -92,6 +88,17 @@ body BgpSession::reborn {} {
     } else {
         set interface [ lindex $interface end ]
         if { $ip_version == "ipv4" } {
+            if {[ info exists ipv4_addr ]} {
+                set interfaces [ ixNet getL $hPort interface ]
+                foreach int $interfaces {
+                    set ipv4hdl [ixNet getL $int ipv4]
+                    set ipaddr [ixNet getA $ipv4hdl -ip]
+                    if {$ipaddr == $ipv4_addr} {
+                        set interface $int
+                        break
+				    }
+                }
+			}
             if { [llength [ixNet getL $interface ipv4]] == 0 } {
                 ixNet add $interface ipv4
                 ixNet commit
@@ -333,7 +340,7 @@ body BgpSession::config { args } {
 body BgpSession::set_route { args } {
     global errorInfo
     global errNumber
-    set tag "body BgpSession::config [info script]"
+    set tag "body BgpSession::set_route [info script]"
     Deputs "----- TAG: $tag -----"
     
     #param collection
@@ -362,6 +369,7 @@ body BgpSession::set_route { args } {
             Deputs "hRouteBlock:$hRouteBlock"
 			set routeBlock($rb,handle) $hRouteBlock
 			lappend routeBlock(obj) $rb
+			Deputs "routeBlock(obj):$routeBlock(obj)"
 			
 			ixNet setM $hRouteBlock \
 				-numRoutes $num \
@@ -569,7 +577,7 @@ Deputs "----- TAG: $tag -----"
 		global errNumber
 		
 		set tag "body Vpn::reborn [info script]"
-    Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		if { [ catch {
 			set hBgp   [ $bgpObj cget -handle ]

@@ -41,6 +41,7 @@ class BfdSession {
 			ixNet commit
 			lappend rb_interface [ ixNet remapIds $int ]
 		}
+		
 	    Deputs "rb_interface is: $rb_interface"
 		array set interface [ list ]
 		
@@ -214,33 +215,53 @@ Deputs "Args:$args "
 	}
 Deputs "Step10"
 	if { [ info exists source_ip ] } {
+	    #check if there is interface whose ip is the same as source_ip
 		foreach rb $rb_interface {
-		
-			if { [ ixNet getA $rb -type ] == "routed" } {
-				continue
+			set ipv4_hdl [ixNet getL $rb ipv4]
+			set ip_addr [ixNet getA $ipv4_hdl -ip]
+			set int_type [ixNet getA $rb -type]
+			if {$int_type != "routed" && $ip_addr == $source_ip} {
+				set matched_int $rb
+				break
 			}
-			
-			ixNet setA [ ixNet getL $rb $ip_version ] \
-				-ip $source_ip
-			if { [ info exists peer_ip ] } {
-				ixNet setA [ ixNet getL $rb $ip_version ] \
-					-gateway $peer_ip
-			}
-			
-			ixNet commit
-			break
 		}
+		
+		if {![info exists matched_int]} {
+			set used_int [ lindex $rb_interface 0 ]
+			foreach rb $rb_interface {
+				if { [ ixNet getA $rb -type ] == "routed" } {
+					continue
+				}
+
+				if {[info exists matched_int] && $rb != $matched_int} {
+					continue
+				}
+				
+				ixNet setA [ ixNet getL $rb $ip_version ] \
+					-ip $source_ip
+				if { [ info exists peer_ip ] } {
+					ixNet setA [ ixNet getL $rb $ip_version ] \
+						-gateway $peer_ip
+				}
+				
+				ixNet commit
+				break
+			}
+		} else {
+			set used_int $matched_int
+		}
+		
 		
  		generate_interface	
 		
 		if { $enable_echo } {
-Deputs "interface:$interface([ lindex $rb_interface 0 ])"		
-			ixNet setA $interface([ lindex $rb_interface 0 ]) -echoConfigureSrcIp True
+Deputs "interface:$interface($used_int)"		
+			ixNet setA $interface($used_int) -echoConfigureSrcIp True
 			ixNet commit
 			if { $ip_version == "ipv4" } {
-				ixNet setA $interface([ lindex $rb_interface 0 ]) -echoSrcIpv4Address $source_ip
+				ixNet setA $interface($used_int) -echoSrcIpv4Address $source_ip
 			} else {
-				ixNet setA $interface([ lindex $rb_interface 0 ]) -echoSrcIpv6Address $source_ip
+				ixNet setA $interface($used_int) -echoSrcIpv6Address $source_ip
 			}
 		}
 	}	
@@ -253,7 +274,7 @@ Deputs "Step100"
 	if { [ info exists count ] } {
 		set bfdSession [ list ]
 		for { set index 0 } { $index < $count } { incr index } {
-			set hSession [ ixNet add $interface([ lindex $rb_interface 0 ]) session ]
+			set hSession [ ixNet add $interface($used_int) session ]
 			ixNet setA $hSession -enabled True
 			if { [ info exists peer_ip ] } {
 				ixNet setA $hSession -remoteBfdAddress $peer_ip
@@ -265,27 +286,27 @@ Deputs "Step100"
 	}
 Deputs "Step110"
 	if { [ info exists echo_rx_interval ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -echoInterval $echo_rx_interval
+		ixNet setA $interface($used_int) -echoInterval $echo_rx_interval
 	}
 Deputs "Step120"
 	if { [ info exists echo_tx_interval ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -echoTxInterval $echo_tx_interval
+		ixNet setA $interface($used_int) -echoTxInterval $echo_tx_interval
 	}
 Deputs "Step130"
 	if { [ info exists rx_interval ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -minRxInterval $rx_interval
+		ixNet setA $interface($used_int) -minRxInterval $rx_interval
 	}
 Deputs "Step140"
 	if { [ info exists tx_interval ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -txInterval $tx_interval
+		ixNet setA $interface($used_int) -txInterval $tx_interval
 	}
 Deputs "Step150"
 	if { [ info exists priority ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -ipDifferentiatedServiceField $priority
+		ixNet setA $interface($used_int) -ipDifferentiatedServiceField $priority
 	}
 Deputs "Step160"
 	if { [ info exists detect_multiplier ] } {
-		ixNet setA $interface([ lindex $rb_interface 0 ]) -multiplier $detect_multiplier
+		ixNet setA $interface($used_int) -multiplier $detect_multiplier
 	}
 Deputs "Step170"
 	if { [ info exists local_disc ] } {

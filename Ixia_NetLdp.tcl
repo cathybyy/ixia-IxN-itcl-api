@@ -182,8 +182,34 @@ Deputs "Args:$args "
 	}
 	if { [ info exists ipv4_addr ] } {
 		foreach int $rb_interface {
+			#update rb_interface and get the interface which has the same ip address as $ipv4_addr
+			set ipv4_hdl [ixNet getL $int ipv4]
+			set ip_addr [ixNet getA $ipv4_hdl -ip]
+			if {[info exists ipv4_gw]} {
+				set ip_gw [ixNet getA $ipv4_hdl -gateway]
+				if {$ip_addr == $ipv4_addr && $ipv4_gw == $ip_gw} {
+					set matched_int $int
+					break
+				}
+			} elseif {$ip_addr == $ipv4_addr} {
+			    set matched_int $int
+				break
+			}
+			
+		}		
+		if {[info exists matched_int]} {		
+			foreach int $rb_interface {
+				if {$matched_int == $int} {
+					continue
+				}
+				ixNet setA $interface($int) -enabled false
+			}
+			set rb_interface $matched_int
+			
+		} 
+		foreach int $rb_interface {
 			catch {
-				ixNet setA $interface($int)/ipv4 -ip  $ipv4_addr
+				ixNet setA $interface($int)/ipv4 -ip $ipv4_addr
 				ixNet commit
 			}
 		}
@@ -536,6 +562,7 @@ class VcLsp {
 		set tag "body VcLsp::reborn [info script]"
         Deputs "----- TAG: $tag -----"
 		set hLdp [ $ldpObj cget -handle ]
+		set hPort [$ldpObj cget -hPort]
 		set range [ ixNet add $hLdp l2Interface ]
         Deputs "range:$range"
 		ixNet setA $range -enabled True

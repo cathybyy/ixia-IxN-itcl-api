@@ -527,7 +527,8 @@ proc SearchMinFrameSizeByLoad { args } {
             }
         }
         ixNet commit
-        
+        Tester::apply_traffic
+		
         if { [ catch {
             foreach traffic $all_streams {
                 #ixNet exec startStatelessTraffic $traffic

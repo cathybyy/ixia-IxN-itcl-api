@@ -1219,14 +1219,16 @@ body DhcpPDoPppHost::config { args } {
                 } else {
                     error "$errNumber(1) key:$key value:$value"
                 }
-            }		   
-		    -iaid {
-			    if { [ string is integer $value ] } {
+            }
+		   
+		   -iaid {
+			   if { [ string is integer $value ] } {
 				   set iaid $value
-			    } else {
+			   } else {
 				   error "$errNumber(1) key:$key value:$value"
-			    }
-		    }		   
+			   }
+		   }
+		   
 			-session_type -
 			-client_mode -
 			-ia_type {
@@ -1246,6 +1248,9 @@ body DhcpPDoPppHost::config { args } {
                     error "$errNumber(1) key:$key value:$value"
                 }
 			}
+            -session_num {
+                set session_num $value
+            }
 			-enable_auth {
 				set enable_auth $value
 			}
@@ -1255,11 +1260,12 @@ body DhcpPDoPppHost::config { args } {
 			-password {
 				set password $value
 			}
-            -session_num {
-                set session_num $value
-            }
-            
-			
+			-pap_user {
+				set pap_user $value
+			}
+			-pap_password {
+				set pap_password $value
+			}
 		}
     }
 
@@ -1279,23 +1285,38 @@ body DhcpPDoPppHost::config { args } {
 				ixNet setA $handle/pppoxRange -ncpType DualStack
 			}
 		}
-    }
-	
+    }	
 	if { [ info exists authentication ] } {
-		switch $authentication {			
-            auto {
+		switch $authentication {
+			auto {
 				set authentication papOrChap
-                if { [ info exists user_name ] } {
+				if { [ info exists pap_user ] } {
 					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapName $user_name  \
-					 -papUser $user_name
+					 -papUser $pap_user
+				}
+				if { [ info exists pap_password ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -papPassword $pap_password
+				}
+				if { [ info exists user_name ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -chapName $user_name
 				}
 				if { [ info exists password ] } {
 					ixNet setMultiAttrs $handle/pppoxRange \
-					 -chapSecret $password  \
-					 -papPassword $password
-				}
+					 -chapSecret $password
+				}	
 			}
+            pap {
+                set authentication pap
+				if { [ info exists pap_user ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -papUser $pap_user
+				}
+				if { [ info exists pap_password ] } {
+					ixNet setMultiAttrs $handle/pppoxRange \
+					 -papPassword $pap_password
+				}	            }
 			chap_md5 {
 				set authentication chap
 				if { [ info exists user_name ] } {
@@ -1307,22 +1328,10 @@ body DhcpPDoPppHost::config { args } {
 					 -chapSecret $password
 				}			
 			}
-            pap {
-				set authentication pap
-				if { [ info exists user_name ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -papUser $user_name
-				}
-				if { [ info exists password ] } {
-					ixNet setMultiAttrs $handle/pppoxRange \
-					 -papPassword $password
-				}			
-			}
-			
 		}
 		ixNet setA $handle/pppoxRange -authType $authentication
 	}
-     if { [ info exists session_num] } {
+    if { [ info exists session_num] } {
         ixNet setA $handle/pppoxRange -numSessions $session_num
     }
     if { [ info exists duid_type ] } {

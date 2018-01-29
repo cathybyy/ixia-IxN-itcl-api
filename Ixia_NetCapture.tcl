@@ -787,16 +787,15 @@ Deputs "content:$content"
 	
 }
 
-
-# #######################################
+#--
 # Start Hal Capture
-#
+#--
 # Parameters: |key, value|
 #       - mode: Capture mode, 0:capture all, 1:capture trig, 2:capture bad
 # Return:
 #        0 if got success
 #        raise error if failed 
-# 
+#--  
 body Capture::start_hal_capture { args } {
 	set tag "proc start_capture [info script]"
 	Deputs "----- TAG: $tag -----"
@@ -833,14 +832,14 @@ body Capture::start_hal_capture { args } {
 	set captureStart true
 }
 
-# #######################################
+#--
 # Stop Hal Capture
-#
+#--
 #
 # Return:
 #        0 if got success
 #        raise error if failed 
-# #######################################
+#--  
 body Capture::stop_hal_capture { } {
 	set tag "proc stop_capture [info script]"
 	Deputs "----- TAG: $tag -----"
@@ -853,8 +852,9 @@ body Capture::stop_hal_capture { } {
 	set captureStart false
 }
 
-# ######################################
+#--
 # Save Hal capture
+#--
 # Parameters: |key, value|
 #       - prefix: Save capture file name's prefix
 #       - resultDir: Result path
@@ -866,7 +866,7 @@ body Capture::stop_hal_capture { } {
 # Return:
 #        0 if got success
 #        raise error if failed 
-# ######################################  
+#--  
 body Capture::save_hal_capture { args } {
 	set tag "proc save_capture [info script]"
 	Deputs "----- TAG: $tag -----"
@@ -1003,8 +1003,9 @@ body Capture::update_info { } {
     }
 }
 
-# ######################################
+#--
 # Save capture
+#--
 # Parameters: |key, value|
 #       - result_dir: Directory which we'll put the capture files
 #       - suffix: Suffix name appended to capture file name
@@ -1014,7 +1015,7 @@ body Capture::update_info { } {
 # Return:
 #        0 if got success
 #        raise error if failed 
-# ######################################  
+#--  
 body Capture::save { args } {
 	set tag "proc save $args [info script]"
 	Deputs "----- TAG: $tag -----"

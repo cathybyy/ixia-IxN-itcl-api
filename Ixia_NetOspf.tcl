@@ -19,7 +19,7 @@ class OspfSession {
 		global errNumber
 		
 		set tag "body OspfvSession::ctor [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		set portObj [ GetObject $port ]
 		set handle ""
@@ -28,7 +28,7 @@ class OspfSession {
 	
 	method reborn {} {
 		set tag "body OspfSession::reborn [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 
 		if { [ catch {
 			set hPort   [ $portObj cget -handle ]
@@ -58,8 +58,8 @@ class OspfSession {
 	method get_stats {} {}
 	method generate_interface { args } {
 		set tag "body OspfSession::generate_interface [info script]"
-		Deputs "----- TAG: $tag -----"
-		Deputs "handle:$handle"		
+Deputs "----- TAG: $tag -----"
+Deputs "handle:$handle"		
 		foreach int $rb_interface {
 			if { [ ixNet getA $int -type ] == "routed" } {
 				continue
@@ -134,7 +134,7 @@ Deputs "Args:$args "
 	ixNet setM $handle -enabled True
 	
 	if { [ info exists router_id ] } {
-        Deputs "router_id:$router_id"	
+Deputs "router_id:$router_id"	
 		ixNet setA $handle -routerId $router_id
 		ixNet commit
 	}	
@@ -403,12 +403,13 @@ class Ospfv2Session {
 
     constructor { port } { chain $port } {
 		set tag "body Ospfv2Session::ctor [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
+        
     }
 	
 	method reborn {} {
 		set tag "body Ospfv2Session::reborn [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 		chain
 		
 		ixNet setA $hPort/protocols/ospf -enabled True
@@ -420,7 +421,7 @@ class Ospfv2Session {
 		ixNet commit
 		set handle [ ixNet remapIds $handle ]
 		ixNet setA $handle -name $this
-		Deputs "handle:$handle"		
+Deputs "handle:$handle"		
 		set protocol ospf
 	}
 	
@@ -962,20 +963,22 @@ class Ospfv3Session {
 	
     constructor { port } { chain $port } {
 		set tag "body Ospfv3Session::ctor [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
+	    
+
     }
 	
 	method reborn {} {
 		set tag "body Ospfv3Session::reborn [info script]"
-		Deputs "----- TAG: $tag -----"
+Deputs "----- TAG: $tag -----"
 		chain
 	    if {[ixNet getA $hPort/protocols/ospf -enabled]} {
 		    ixNet setM $hPort/protocols/ospf -enabled False
 	    }	    
 	    
-		ixNet setM $hPort/protocols/ospfV3 -enabled True
-		ixNet commit 
-		Deputs "handle:$handle"		
+	   ixNet setM $hPort/protocols/ospfV3 -enabled True
+	   ixNet commit 
+Deputs "handle:$handle"		
 		#-- add ospf protocol
 		set handle [ ixNet add $hPort/protocols/ospfV3 router ]
 		ixNet setA $handle -Enabled True
@@ -1571,7 +1574,7 @@ Deputs "Args:$args "
 		set step		[ $rb cget -step ]
 		set prefix_len	[ $rb cget -prefix_len ]
 		
-		Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
+Deputs "num:$num start:$start step:$step prefix_len:$prefix_len"
 		ixNet setM $handle \
 			-mask $prefix_len \
 			-numberOfRoutes $num \

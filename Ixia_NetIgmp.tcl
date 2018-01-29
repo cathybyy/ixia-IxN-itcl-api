@@ -210,17 +210,35 @@ body IgmpHost::config { args } {
             }
 		}
     }
-	
-    if {[ixNet getA $handle -interfaces] == "" } {
+    
+    set interfaces [ixNet getA $handle -interfaces]
+    if {$interfaces == "" || [regexp -nocase "null" $interfaces]} {
+	#check if there is one host with the same ip
+	if {[info exists ipaddr]} {
+		set interfaces [ ixNet getL $hPort interface ]
+		foreach int $interfaces {
+			set ipv4_hdl [ixNet getL $int ipv4]
+			set ip_addr [ixNet getA $ipv4_hdl -ip]
+			if {$ip_addr == $ipaddr} {
+				set matched_int $int
+				break
+			}
+		}
+	}
+	if {[info exists matched_int]} {
+		set int $matched_int
+	} else {
+		if { [ GetObject $this.host ] == "" } {
+			Host $this.host $portObj
+		}
+		eval {$this.host} config $args
+		set int [ $this.host cget -handle ]
+	}
     	
-        if { [ GetObject $this.host ] == "" } {
-            Host $this.host $portObj
-        }
-        eval {$this.host} config $args
             
         ixNet setA $handle \
             -interfaceType "Protocol Interface" \
-            -interfaces [ $this.host cget -handle ]
+            -interfaces $int
         ixNet commit
     }
 
