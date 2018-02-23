@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.69
+set releaseVersion 4.70
 #===============================================================================
 # Change made
 # ==2011==
@@ -268,6 +268,8 @@ set releaseVersion 4.69
 #		124. Release on Aug. 28th
 # Version 4.68
 #       125. Add Rfc3918 JoinLeaveDelay
+# Version 4.70
+#       125. loadconfig for HW ruby.No objects automatic generated.
 
 proc GetEnvTcl { product } {
    
@@ -287,7 +289,7 @@ proc GetEnvTcl { product } {
    return             [ registry get $installInfo  HOMEDIR ]
 
 }
-
+set testerConfigFile ""
 set portlist [list]
 set trafficlist [list]
 set portnamelist [list]
@@ -295,12 +297,14 @@ set trafficnamelist [list]
 set tportlist [list]
 set remote_server "localhost"
 set remote_serverPort "8009"
+set LoadConfigMode 0
 proc loadconfig { filename } {
     global portlist
     global trafficlist
     global portnamelist
     global trafficnamelist
     global tportlist
+    global LoadConfigMode
     puts "Loadconfig $filename"
     ixNet exec loadConfig [ixNet readFrom $filename]
     set root [ixNet getRoot]
@@ -320,6 +324,559 @@ proc loadconfig { filename } {
             # lappend tportlist [ixNet getA $trafficobj -txPortName]
         # }
     }
+    set LoadConfigMode 1
+}
+
+proc initLoadObjects {} {
+    global portnamelist
+    global portlist
+    global trafficlist
+    global tportlist
+    global trafficnamelist
+    
+    foreach pname $portnamelist pobj $portlist {
+        Port $pname NULL NULL $pobj
+        # Generate protocols objects
+        GenerateProtocolsObjects $pname
+    }
+    
+    foreach tname $trafficnamelist tobj $trafficlist tport $tportlist {
+        Traffic $tname $tport $tobj
+    }
+    
+    
+}
+
+proc GenerateProtocolsObjects { portObj } {
+    set tag "body Port::gen_pro_objs [info script]"
+    Deputs "----- TAG: $tag -----"
+    
+    set portObj [GetObject $portObj]
+    set handle [$portObj cget -handle]
+    set handleName [$portObj cget -handleName]
+    set protocols [ixNet getL $handle protocols]
+    set protocolList [list bfd bgp igmp isis ldp mld ospf ospfV3 static]
+    foreach pro $protocolList {
+        set protocol [ixNet getL $protocols $pro]
+        # Special to handle static
+        set enabled [ ixNet getA $protocol -enabled ]
+        if { $pro == "static" && $enabled == "::ixNet::OK" } {
+            set enabled true
+        }
+        if { $enabled } {
+            switch -exact $pro {
+                bfd {
+                    set bfdR [ixNet getL $protocol router]
+                    BfdSession ${handleName}/bfd $handleName $bfdR
+                }
+                bgp {
+                    set bgpNR [ixNet getL $protocol neighborRange]
+                    BgpSession ${handleName}/bgp $handleName $bgpNR
+                }
+                igmp {
+                    set igmpH [ixNet getL $protocol host]
+                    IgmpHost ${handleName}/igmp $handleName $igmpH
+                }
+                mld {
+                    set mldH [ixNet getL $protocol host]
+                    MldHost ${handleName}/mld $handleName $mldH
+                }
+                isis {
+                    set isisR [ixNet getL $protocol router]
+                    IsisSession ${handleName}/isis $handleName $isisR
+                }
+                ldp {
+                    set ldpR [ixNet getL $protocol router]
+                    LdpSession ${handleName}/ldp $handleName $ldpR
+                }
+                ospf {
+                    set ospfR [ixNet getL $protocol router]
+                    Ospfv2Session ${handleName}/ospf $handleName $ospfR
+                }
+                ospfV3 {
+                    set ospfV3R [ixNet getL $protocol router]
+                    Ospfv3Session ${handleName}/ospfV3 $handleName $ospfV3R
+                }
+                static {
+                    set staticLan [ixNet getL $protocol lan]
+                    Host ${handleName}/static $handleName $staticLan
+                }
+            }
+        }
+    }
+
+    set protocolStack [ixNet getL $handle protocolStack]
+    set protocolStackList [list ipEndpoint dhcpEndpoint dhcpServerEndpoint pppoxEndpoint]
+    foreach proStack $protocolStackList {
+        set ethernet [ixNet getL $protocolStack ethernet]
+        if { [llength $ethernet] == 0 } {
+            continue
+        }
+		
+		foreach ethernet $ethernet {
+			set stack [ixNet getL $ethernet $proStack]
+			if { $stack != "" } {
+				switch -exact $proStack {
+					dhcpEndpoint {
+						set ranges [ixNet getL $stack range]
+						foreach range $ranges {
+							set ipType [ixNet getA $range/dhcpRange -ipType]
+							set objName [ixNet getA $range/dhcpRange -name]
+							if { $ipType == "IPv4" } {
+								Dhcpv4Host $objName $handleName $stack $range
+							} elseif { $ipType == "IPv6" } {
+								Dhcpv6Host $objName $handleName $stack $range
+							}
+						}
+					}
+					dhcpServerEndpoint {
+						set ranges [ixNet getL $stack range]
+						foreach range $ranges {
+							set ipType [ixNet getA $range/dhcpServerRange -ipType]
+							set objName [ixNet getA $range/dhcpServerRange -name]
+							if { $ipType == "IPv4" } {
+								Dhcpv4Server $objName $handleName $stack $range
+							} elseif { $ipType == "IPv6" } {
+								Dhcpv6Server $objName $handleName $stack $range
+							}
+						}
+					}
+					pppoxEndpoint {
+						set ranges [ixNet getL $stack range]
+						foreach range $ranges {
+							set objName [ixNet getA $range/pppoxRange -name]
+							PppoeHost $objName $handleName $stack $range
+						}
+					}
+					ipEndpoint {
+						set ranges [ixNet getL $stack range]
+						foreach range $ranges {
+							set objName [ixNet getA $range/ipRange -name]
+							set ipRangeOptions [ixNet getL $protocolStack ipRangeOptions]
+							if { [llength $ipRangeOptions] != 0 } {
+								if { [ixNet getA $ipRangeOptions -ipv6AddressMode] == "autoconf" } {
+									Ipv6AutoConfigHost $objName $handleName $stack $range
+								} else {
+									IPoEHost $objName $handleName $stack $range
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+    }
+}
+
+
+proc GetAllPortObj {} {
+    set portObj [list]
+    set objList [ find objects ]
+    foreach obj $objList {
+        if { [ $obj isa Port ] } {
+            lappend portObj [ $obj cget -handle ]
+        }
+    }
+    
+    return $portObj
+}
+
+proc GetValidHandleObj { objType handle { parentHnd "" } } {
+set tag "GetValidHandleObj [info script]"
+    Deputs "----- TAG: $tag -----"
+	set index 0
+	if { [ catch {
+		set index [expr $index + $handle] 
+	} err ] } {
+		set index 0
+	}
+	
+	switch -exact $objType {
+		port {
+        Deputs "check port: checkname $handle"
+			foreach port [ixNet getL [ixNet getRoot] vport] {
+                set portname [ixNet getA $port -name]
+				if { $port == $handle } {
+					return $handle
+				} elseif { $portname == $handle || $portname == [lindex [split $handle "::"] end] } {
+                Deputs "portname:$portname; checkname $handle"
+					return $port 
+				} elseif { [llength [ split $handle "/" ]] == 3 } {
+					set realLocationInfo [ split $handle "/" ]
+					set assignedTo [ixNet getA $port -assignedTo]
+					set ModuleNo    [lindex [split $assignedTo ":"] 1]
+					set PortNo      [lindex [split $assignedTo ":"] 2]
+					if { $ModuleNo == [lindex $realLocationInfo 1] && $PortNo == [lindex $realLocationInfo 2]} {
+						return $port
+					}
+				}
+			}
+			return ""
+		}
+		traffic {
+			set trafficObjs [ixNet getL [ixNet getL [ixNet getRoot] traffic] trafficItem]
+			foreach trafficItemobj $trafficObjs {
+				set itemlist [ixNet getL $trafficItemobj highLevelStream]
+                set itemName [ixNet getA $trafficItemobj -name]
+				foreach trafficobj $itemlist {
+                    set highName [ixNet getA $trafficobj -name]
+                    if { [ixNet getA $trafficobj -txPortName] == [ixNet getA $parentHnd -name] } {
+                        if { $highName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $highName } {
+                            return $trafficItemobj
+                        } elseif { $itemName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $itemName || $itemName == [lindex [split $handle "::"] end] } {
+                            return $trafficItemobj
+                        }
+                    }
+				}
+			}
+            
+            set index [expr $index - 1]
+            if { $index >= 0 && [llength $trafficObjs] != 0 && [llength $trafficObjs] > $index } {
+                return [lindex $trafficObjs $index]
+            }
+            
+            return ""
+		}
+		bfd {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols bfd]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol router]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] > $index} {
+					return [lindex $routers $index]
+				}
+			}
+			return ""
+		}
+
+		bgp {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols bgp]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol neighborRange]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] != 0 && [llength $routers] > $index } {         
+					return [lindex $routers $index]
+				}
+			}			
+			return ""
+		}
+		igmp_host {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols igmp]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set hosts [ixNet getL $protocol host]
+				foreach host $hosts {
+					if { $host == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $hosts] != 0 && [llength $hosts] > $index } {
+					return [lindex $hosts $index]
+				}
+			}			
+			return ""
+		}
+		mld_host {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols mld]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set hosts [ixNet getL $protocol host]
+				foreach host $hosts {
+					if { $host == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $hosts] != 0 && [llength $hosts] > $index } {
+					return [lindex $hosts $index]
+				}
+			}			
+			return ""		
+		}
+		isis {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols isis]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol router]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] > $index} {
+					return [lindex $routers $index]
+				}
+			}			
+			return ""		
+		}
+		ldp {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols ldp]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol router]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] > $index} {
+					return [lindex $routers $index]
+				}
+			}			
+			return ""		
+		}
+		ospfv2 {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols ospf]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol router]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] > $index} {
+					return [lindex $routers $index]
+				}
+			}			
+			return ""		
+		}
+		ospfv3 {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols ospfV3]
+			if { [ ixNet getA $protocol -enabled ] } {
+				set routers [ixNet getL $protocol router]
+				foreach router $routers {
+					if { $router == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $routers] > $index} {
+					return [lindex $routers $index]
+				}
+			}			
+			return ""		
+		}
+		host {
+			set protocols [ixNet getL $parentHnd protocols]
+			set protocol [ixNet getL $protocols static]
+			if { [ ixNet getA $protocol -enabled ] == "::ixNet::OK" } {
+				set lans [ixNet getL $protocol lan]
+				foreach lan $lans {
+					if { $lan == $handle } {
+						return $handle
+					} 
+				}
+				
+				set index [expr $index - 1]
+				if { $index >= 0 && [llength $lans] > $index} {
+					return [lindex $lans $index]
+				}
+			}
+			return ""			
+		}
+		dhcp {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet dhcpEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+                set ipv4Ranges [list ]
+				foreach range $ranges {
+				    if { [ixNet getA $range/dhcpRange -ipType] != "IPv4" } {
+						continue
+					}
+                    lappend ipv4Ranges $range
+                    set rangeName [ixNet getA $range/dhcpRange -name]
+					if { $range == $handle } {
+						return [list $stack $range]
+					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+						return [list $stack $range]
+					}
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ipv4Ranges] > $index} {
+                    return [list $stack [lindex $ipv4Ranges $index]]
+                }
+			}
+			return ""
+		}
+		dhcp_server {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet dhcpServerEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+                set ipv4Ranges [list ]
+				foreach range $ranges {
+				    if { [ixNet getA $range/dhcpServerRange -ipType] != "IPv4" } {
+						continue
+					}
+                    lappend ipv4Ranges $range
+                    set rangeName [ixNet getA $range/dhcpRange -name]
+					if { $range == $handle } {
+						return [list $stack $range]
+					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+						return [list $stack $range]
+					}	
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ipv4Ranges] > $index} {
+                    return [list $stack [lindex $ipv4Ranges $index]]
+                }
+			}
+			return ""
+		}
+		dhcpv6 {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet dhcpEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+                set ipv6Ranges [list ]
+				foreach range $ranges {
+				    if { [ixNet getA $range/dhcpRange -ipType] != "IPv6" } {
+						continue
+					}
+                    lappend ipv6Ranges $range
+                    set rangeName [ixNet getA $range/dhcpRange -name]
+					if { $range == $handle } {
+						return [list $stack $range]
+					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+						return [list $stack $range]
+					}
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ipv6Ranges] > $index} {
+                    return [list $stack [lindex $ipv6Ranges $index]]
+                }	
+			}
+			return ""
+		}
+		dhcpv6_server {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet dhcpServerEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+                set ipv6Ranges [list ]
+				foreach range $ranges {
+				    if { [ixNet getA $range/dhcpServerRange -ipType] != "IPv6" } {
+						continue
+					}
+                    lappend ipv6Ranges $range
+                    set rangeName [ixNet getA $range/dhcpRange -name]
+					if { $range == $handle } {
+						return [list $stack $range]
+					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+						return [list $stack $range]
+					}
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ipv6Ranges] > $index} {
+                    return [list $stack [lindex $ipv6Ranges $index]]
+                }
+			}
+			return ""
+		}		
+		pppoe_host {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet pppoxEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+				foreach range $ranges {
+                    set rangeName [ixNet getA $range/pppoxRange -name]
+					if { $range == $handle } {
+						return [list $stack $range]
+					} elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+						return [list $stack $range]
+					}
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ranges] > $index} {
+                    return [list $stack [lindex $ranges $index]]
+                }
+			}
+			return ""
+		}
+        ipoe_host {
+			set protocolStack [ixNet getL $parentHnd protocolStack]
+            set ipRangeOptions [ixNet getL $protocolStack ipRangeOptions]
+			set ethernets [ixNet getL $protocolStack ethernet]
+			foreach ethernet $ethernets {
+				set stack [ixNet getL $ethernet ipEndpoint]
+				if { $stack == "" } {
+					continue
+				}
+				set ranges [ixNet getL $stack range]
+                set ipoeRanges [list ]
+				foreach range $ranges {
+                    if { [llength $ipRangeOptions] != 0 } {
+                        if { [ixNet getA $ipRangeOptions -ipv6AddressMode] == "autoconf" } {
+                            continue
+                        }
+                    }
+                    lappend ipoeRanges $range
+                    set rangeName [ixNet getA $range/ipRange -name]
+                    if { $range == $handle } {
+                        return [list $stack $range]
+                    } elseif { $rangeName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $rangeName } {
+                        return [list $stack $range]
+                    }
+				}
+                set index [expr $index - 1]
+                if { $index >= 0 && [llength $ipoeRanges] > $index} {
+                    return [list $stack [lindex $ipoeRanges $index]]
+                }
+			}
+			return ""
+        }
+        default {
+            return ""
+        }
+	}
+    return ""
 }
 
 proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
@@ -331,10 +888,12 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
     global portnamelist
     global trafficnamelist
     global tportlist
+    global testerConfigFile
     
 	global remote_server
 	global remote_serverPort
 	
+    puts "testerConfigFile:$testerConfigFile"
 	set loginInfo $location
     puts "Login...$location"	
 	if { $location == "" } {
@@ -377,17 +936,15 @@ proc Login { { location "localhost/8009"} { force 0 } { filename null } } {
 		}
         
         if { $flag == 1 } {
-            if { $filename != "null" } {
-                loadconfig $filename
+            if { $filename != "null"  || $testerConfigFile != "" } {
+                if { $filename != "null" } {
+                    loadconfig $filename
+                } else {
+                    loadconfig $testerConfigFile 
+                }
+                
 				after 15000
                 
-                foreach pname $portnamelist pobj $portlist {
-                   Port $pname NULL NULL $pobj
-                }
-                
-                foreach tname $trafficnamelist tobj $trafficlist tport $portnamelist {
-                   Traffic $tname $tport $tobj
-                }
 				
 				return
                 

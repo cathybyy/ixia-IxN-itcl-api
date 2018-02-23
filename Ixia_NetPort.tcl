@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 2.17
+# Release Version 2.18
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -91,6 +91,8 @@
 #		45. add port.Reconnect
 # Version 2.17.4.60
 #       46. modify Host.enable|disable, add hostInfo for 3918
+# Version 2.18.4.70
+#       47. modify for loadconfigmode
 
 class Port {
     inherit NetObject
@@ -194,9 +196,11 @@ class Port {
 }
 
 body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0} } {
+    
     set tag "body Port::ctor [info script]"
     Deputs "----- TAG: $tag -----"
-
+    
+    global LoadConfigMode
     # -- Check for Multiuser Login
 	set portObjList [ GetAllPortObj ]
 	if { [ llength $portObjList ] == 0 } {
@@ -218,6 +222,10 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
 		set chassis     [ lindex $locationInfo 0 ]
 		set ModuleNo    [ lindex $locationInfo 1 ]
 		set PortNo      [ lindex $locationInfo 2 ]
+        if { $LoadConfigMode } {
+            set handle		[GetValidHandleObj "port" $hw_id]
+        }
+        
 		if { [ GetRealPort $chassis $ModuleNo $PortNo 0 ] == [ ixNet getNull ] } {
 			error "Port hardware not found: $hw_id"
 		}
@@ -232,6 +240,7 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
 		set location $hw_id
         Deputs "location:$location" 
     } else {
+        
         if { $hPort != "NULL" } {
 			set chassis ""
 			set card ""
@@ -246,12 +255,18 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
 			ixNet setA $handle -name $this
 			ixNet commit
 		} else {
-            Deputs "offline create"
-            set root [ixNet getRoot]
-            set handle [ixNet add $root vport]
-            ixNet setA $handle -name $this
-            ixNet commit
-            set handle [ixNet remapIds $handle]
+            if { $LoadConfigMode } {
+                set handle		[GetValidHandleObj "port" $this]
+            } 
+            if { $handle== "" } {
+                Deputs "offline create"
+                set root [ixNet getRoot]
+                set handle [ixNet add $root vport]
+                ixNet setA $handle -name $this
+                ixNet commit
+                set handle [ixNet remapIds $handle]
+            }
+           
         }  
     }
 	set intf_mac 	 ""
@@ -278,13 +293,18 @@ body Port::Connect { location { medium NULL } { checkLink 0 } { force 0 } } {
     Deputs "----- TAG: $tag -----"
     # -- add vport
     set root    [ ixNet getRoot ]
-    set vport   [ ixNet add $root vport ]
-    ixNet setA $vport -name $this
+    if { $handle == "" } {
+        set vport   [ ixNet add $root vport ]
+        ixNet setA $vport -name $this
+    }
+    
 	if { $medium != "NULL" } {
         Deputs "connect medium:$medium"	
-        if {[ixNet getA $vport -type] == "ethernet" } {
-            ixNet setA $vport/l1Config/ethernet -media $medium
-        }
+        # if {[ixNet getA $vport -type] == "ethernet" } {
+            # ixNet setA $vport/l1Config/ethernet -media $medium
+        # }
+        ixNet setA $vport/l1Config/[ixNet getA $vport -type] -media $medium
+       
 		
 	}
     set vport [ixNet remapIds $vport]
@@ -315,7 +335,7 @@ body Port::Connect { location { medium NULL } { checkLink 0 } { force 0 } } {
 	set handle [ixNet remapIds $handle]
     Deputs "handle:$handle"	
 	ixNet setA $handle -transmitIgnoreLinkStatus True
-       ixNet commit       
+    ixNet commit       
  
 	return $handle
 }
@@ -940,7 +960,7 @@ ixNet commit
     
     if { [ info exists media ] } {
         if {[ixNet getA $handle -type] == "ethernet" } {
-            ixNet setA $handle/l1Config/ethernet -media $media
+            ixNet setA $handle/l1Config/[ixNet getA $handle -type] -media $media
             ixNet commit
         }
         

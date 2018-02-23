@@ -173,10 +173,10 @@ Deputs "pkt count:$pktCnt"
 
 		if { $err == "" } {
 			set rsGetBuffer [ eval captureBuffer get $chasId $card $port 1 $pktCnt ]
-	Deputs "result get buffer:$rsGetBuffer"
+	#Deputs "result get buffer:$rsGetBuffer"
 			for { set packet_index 1 } { $packet_index <= $pktCnt } { incr packet_index } {
 				set rsGetFrame [ captureBuffer getframe $packet_index ]
-	Deputs "result get frame:$rsGetFrame"
+	#Deputs "result get frame:$rsGetFrame"
 				set hex [ captureBuffer cget -frame ]
 				lappend content $hex
 	# Deputs "hex:$hex"

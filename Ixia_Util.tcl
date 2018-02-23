@@ -964,3 +964,14 @@ proc GetFileFromDir { dir name } {
     cd $old_dir
     return ""
 }
+
+
+proc GetObjNameFromString { str { retVal "" } } {
+	set name ""
+	if { [ catch {
+		set name [lindex [split [lindex [split $str "\("] 1] "\)"] 0]
+	} err ] } {
+		return $retVal
+	} 
+	return $name
+}

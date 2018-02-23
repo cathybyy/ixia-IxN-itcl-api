@@ -255,6 +255,7 @@ class Traffic {
 		ixNet commit
 	}
     public variable id
+    public variable modifyMode
     
     #stream stats
     public variable hPort
@@ -532,24 +533,9 @@ body Traffic::constructor { port { hTraffic NULL } } {
 
     set iteration_duration 10
     set resolution 1
+    global LoadConfigMode
     
-	if { $hTraffic != "NULL" } {
-		set handle $hTraffic
-		set highLevelStream [ ixNet getL $handle configElement ]
-		set endpointSet [ ixNet getL $handle endpointSet ]
-	} else {
-		set root    [ixNet getRoot]
-		set handle  [ixNet add $root/traffic trafficItem]
-        ixNet commit
-        set handle      [ ixNet remapIds $handle ]
-        Deputs "handle:$handle"
-
-	}
-	regexp {\d+} $handle id
-	ixNet setA $handle -name $this
-    Deputs "traffic item handle:$handle"
-	
-	set portObj $port
+    set portObj $port
     Deputs "portObj:$portObj"
 	if { [ catch {
 		set hPort [ $port cget -handle ]
@@ -559,6 +545,40 @@ body Traffic::constructor { port { hTraffic NULL } } {
         Deputs "port:$port"		
 		set hPort [ $port cget -handle ]
 	}
+    
+    
+	if { $hTraffic != "NULL" } {
+		set handle $hTraffic
+		set highLevelStream [ ixNet getL $handle configElement ]
+		set endpointSet [ ixNet getL $handle endpointSet ]
+        set modifyMode 1
+	} else {
+        if { $LoadConfigMode } {
+            set handle	[GetValidHandleObj "traffic" $this $hPort]
+           
+        }
+        if { $handle != "" } {
+            set highLevelStream [ ixNet getL $handle configElement ]
+            set endpointSet [ ixNet getL $handle endpointSet ]
+            set modifyMode 1
+        } else {
+            set root    [ixNet getRoot]
+            set handle  [ixNet add $root/traffic trafficItem]
+            ixNet commit
+            set handle      [ ixNet remapIds $handle ]
+            Deputs "handle:$handle"
+            set modifyMode 0
+            ixNet setA $handle -name $this
+            ixNet commit
+        }
+		
+
+	}
+	regexp {\d+} $handle id
+
+    Deputs "traffic item handle:$handle"
+	
+
 }
 
 body Traffic::config { args  } {
@@ -638,7 +658,6 @@ body Traffic::config { args  } {
 	set tos_tracking 0
 	set no_src_dst_mesh 0
 	set no_mesh 0
-	set to_raw 0
 	set pdu_index 1
     set burst_gap_units "bytes"
     #set burst_gap_units "nanoseconds"
@@ -647,7 +666,9 @@ body Traffic::config { args  } {
     set enable_min_frame_size "true"
     set regenerate false
     set frame_len_type fixed
-	
+    
+	set to_raw 0
+    
     set tag "body Traffic::config [info script]"
     Deputs "----- TAG: $tag -----"
     #param collection
@@ -2314,6 +2335,8 @@ body Traffic::config { args  } {
         }
         ixNet commit
     }
+    
+    set modifyMode 1
     
     return [GetStandardReturnHeader]
 

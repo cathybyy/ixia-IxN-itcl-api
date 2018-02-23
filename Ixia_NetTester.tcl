@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2010-2011, Inc.
 
-# Release Version 1.22
+# Release Version 1.23
 #===============================================================================
 # Change made
 # Version 1.0 
@@ -51,6 +51,8 @@
 #		23. add remove_all_stream proc
 # Version 1.22.7.28
 #       24. add Tester::delete_pppoe
+# Version 1.23.1.29
+#       25. add Tester::tester_config_file
 
 
 class Tester {
@@ -76,6 +78,8 @@ class Tester {
     proc isLossFrames { { streams "" } } {}
     proc saveResults { args } {}
     proc set_stats_mode { args } {}
+    proc tester_config_file { filedir } {}
+    
 }
 
 proc Tester::getAllTx {} {
@@ -939,3 +943,11 @@ Deputs "----- TAG: $tag -----"
 	
 	return [ GetStandardReturnHeader ]
 }
+
+proc Tester::tester_config_file { filedir } {
+    set tag "proc Tester::tester_config_file [info script]"
+Deputs "----- TAG: $tag -----"
+    
+    global testerConfigFile
+    set testerConfigFile $filedir
+ }
