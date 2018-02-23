@@ -520,13 +520,18 @@ set tag "GetValidHandleObj [info script]"
                 set itemName [ixNet getA $trafficItemobj -name]
 				foreach trafficobj $itemlist {
                     set highName [ixNet getA $trafficobj -name]
-                    if { [ixNet getA $trafficobj -txPortName] == [ixNet getA $parentHnd -name] } {
-                        if { $highName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $highName } {
-                            return $trafficItemobj
-                        } elseif { $itemName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $itemName || $itemName == [lindex [split $handle "::"] end] } {
-                            return $trafficItemobj
-                        }
-                    }
+					if { $highName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $highName } {
+						return $trafficItemobj
+					} elseif { $itemName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $itemName || $itemName == [lindex [split $handle "::"] end] } {
+						return $trafficItemobj
+					}
+                    # if { [ixNet getA $trafficobj -txPortName] == [ixNet getA $parentHnd -name] } {
+                        # if { $highName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $highName } {
+                            # return $trafficItemobj
+                        # } elseif { $itemName == $handle || [string range $handle 1 [expr [string length $handle] - 2]] == $itemName || $itemName == [lindex [split $handle "::"] end] } {
+                            # return $trafficItemobj
+                        # }
+                    # }
 				}
 			}
             

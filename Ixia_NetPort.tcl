@@ -193,6 +193,7 @@ class Port {
     public variable intf_ipv4
     public variable inter_burst_gap
 	public variable PortNo
+	public variable port_name
 }
 
 body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0} } {
@@ -201,6 +202,7 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
     Deputs "----- TAG: $tag -----"
     
     global LoadConfigMode
+	set port_name $this
     # -- Check for Multiuser Login
 	set portObjList [ GetAllPortObj ]
 	if { [ llength $portObjList ] == 0 } {
@@ -224,19 +226,27 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
 		set PortNo      [ lindex $locationInfo 2 ]
         if { $LoadConfigMode } {
             set handle		[GetValidHandleObj "port" $hw_id]
+			if {$handle != ""} {
+			    # ixNet setA $handle -name $this
+				# ixNet commit
+				set port_name [ixNet getA $handle -name]
+			}
+			
         }
-        
-		if { [ GetRealPort $chassis $ModuleNo $PortNo 0 ] == [ ixNet getNull ] } {
-			error "Port hardware not found: $hw_id"
-		}
-        Deputs Step20	
-		catch {
-			if { $medium != "NULL" } {
-				set handle [ Connect $hw_id $medium 1  $force]
-			} else {
-				set handle [ Connect $hw_id NULL 0 $force]
+        if {$handle == "" } {
+		    if { [ GetRealPort $chassis $ModuleNo $PortNo 0 ] == [ ixNet getNull ] } {
+				error "Port hardware not found: $hw_id"
+			}
+			Deputs Step20	
+			catch {
+				if { $medium != "NULL" } {
+					set handle [ Connect $hw_id $medium 1  $force]
+				} else {
+					set handle [ Connect $hw_id NULL 0 $force]
+				}
 			}
 		}
+		
 		set location $hw_id
         Deputs "location:$location" 
     } else {
@@ -262,10 +272,13 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
                 Deputs "offline create"
                 set root [ixNet getRoot]
                 set handle [ixNet add $root vport]
-                ixNet setA $handle -name $this
-                ixNet commit
-                set handle [ixNet remapIds $handle]
+                # ixNet setA $handle -name $this
+                # ixNet commit
+                # set handle [ixNet remapIds $handle]
             }
+			ixNet setA $handle -name $this
+			ixNet commit
+			set handle [ixNet remapIds $handle]
            
         }  
     }
@@ -296,6 +309,7 @@ body Port::Connect { location { medium NULL } { checkLink 0 } { force 0 } } {
     if { $handle == "" } {
         set vport   [ ixNet add $root vport ]
         ixNet setA $vport -name $this
+		ixNet commit
     }
     
 	if { $medium != "NULL" } {
