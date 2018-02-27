@@ -776,11 +776,13 @@ body Traffic::config { args  } {
                 set pdu $value
                 Deputs "pdu:$pdu"
             }
-
+            -modify_stream_pdu {
+                set modify_pdu $value
+                Deputs "modify_pdu:$modify_pdu"
+            }
             -pdu_index {
                 set pdu_index $value
             }
-
             -tx_mode {
                 set value [ string tolower $value ]
                 if { [ lsearch -exact $EMode $value ] >= 0 } {
@@ -1930,6 +1932,181 @@ body Traffic::config { args  } {
 		}
         Deputs "src:$src"
 	}
+    
+    
+    if { [ info exists modify_pdu ] } {
+        
+		foreach hStream $highLevelStream {
+            set flagPduObj  1
+            Deputs "modify_pdu:$modify_pdu"
+            foreach head $modify_pdu {
+                Deputs "head:$head"
+                set head [ GetObject $head ]
+                Deputs "head obj:$head"
+                if { $head != "" } {
+                    #-- pdu objects
+                    if { [ $head isa NetObject ] } {
+                        if { [ $head isa Header ] == 0 } {
+                            error "$errNumber(1) key: pdu value: $head (Not a Header)"                
+                        }
+                    } else {
+                        error "$errNumber(1) key: pdu value: $head (Not an IxiaNet Object)"                
+                    }
+                } else {
+                    set flagPduObj 0
+                    break
+                }
+            }
+            if { $flagPduObj } {
+               				                			
+                foreach name $modify_pdu {
+                    set name [ GetObject $name ]
+                    # Read type protocol message
+                   
+                    set protocol  [ $name cget -protocol ]
+                    Deputs "Protocol: $protocol "
+                     
+                    # Find pdu protocols
+                                                                                   
+                    foreach pro [ ixNet getList $hStream stack ] {
+                        Deputs "pro:$pro"
+                        if { [ regexp -nocase $protocol $pro ] } {
+                            if { [ regexp -nocase "${protocol}\[a-z\]+" $pro ] == 0 } {
+                                
+                                break
+                            }
+                        }
+                       
+                    }
+                    set stack $pro
+
+                    set needMod 1                                       
+                    Deputs "Stack:$stack"
+                   
+                    
+                    set fieldModes [ $name cget -fieldModes ]
+                    set fields [ $name cget -fields ]
+                    set fieldConfigs [ $name cget -fieldConfigs ]
+                    set optional [ $name cget -optionals ]
+                    set autos [ $name cget -autos ]
+                    set meshes [ $name cget -meshes ]
+                    Deputs "PDU:\n\tModes:$fieldModes\n\tFields:$fields\n\tConfigs:$fieldConfigs\n\tOptional:$optional\n\tAutos:$autos\n\tMeshes:$meshes"
+                    foreach mode $fieldModes field $fields conf $fieldConfigs\
+                        opt $optional auto $autos mesh $meshes {
+                        if { $field == "" } {
+                            continue
+                        }
+                        Deputs "stack:$stack"
+                        Deputs "field:$field"
+                        Deputs "mesh:$mesh"
+                        set obj [ GetField $stack $field ]
+                        Deputs "Field object: $obj"
+        
+                        if { [ info exists opt ] } {
+                            if { $opt == "" } { continue }
+                            if { $opt } {
+                                ixNet setA $obj -activeFieldChoice True
+                                ixNet commit
+                                continue
+                            }
+                        } else {
+                            continue
+                        }
+                        if { [ info exists auto ] } {
+                            Deputs Step47
+                            if { $auto == "" } { continue }
+                            if { $auto } {
+                                Deputs Step48
+                                ixNet setA $obj -auto True
+                                ixNet commit
+                                continue
+                            } else {
+                                Deputs Step49
+                                Deputs "obj:$obj"
+                                ixNet setA $obj -auto False
+                                ixNet commit
+                           }
+                        } else {
+                            continue
+                        }
+                        if { [ info exists mesh ] } {
+                            if { $mesh == "" } { continue }
+                            if { $mesh } {
+                                Deputs "Mesh the field:$obj"
+                                Deputs "fullMesh:[ixNet getA $obj -fullMesh ]"			
+                                ixNet setA $obj -fullMesh True
+                                ixNet commit
+                                Deputs "fullMesh:[ixNet getA $obj -fullMesh ]"
+                            }
+                        }
+                        if { [ info exists mode ] == 0 || [ info exists field ] == 0 ||\
+                           [ info exists conf ] == 0 } {
+                            Deputs "continue"
+                            continue
+                        }
+                        Deputs "Mode:$mode"
+                        switch -exact $mode {
+                           Fixed {
+                                Deputs "Fixed:$protocol\t$field\t$conf"
+                                ixNet setMultiAttrs $obj \
+                                    -valueType singleValue \
+                                    -singleValue $conf
+                                ixNet commit
+                           }
+                           List {
+                                Deputs "List:$protocol\t$field\t$conf [ llength $conf ]"
+                                if { [ llength $conf ] == 1 } {
+                                    eval ixNet setMultiAttrs $obj \
+                                        -valueType valueList \
+                                        -valueList $conf
+                                } else {
+                                    ixNet setMultiAttrs $obj \
+                                        -valueType valueList \
+                                        -valueList $conf
+                                }
+                                ixNet commit
+                           }
+                           Segment {
+                           }
+                           Random {
+                                Deputs "Random...continue"
+                                ixNet setA $obj \
+                                    -valueType nonRepeatableRandom 
+                                ixNet commit
+                            }
+                           Reserved {
+                                Deputs "Reserved...continue"
+                                continue
+                           }
+                           Incrementing -
+                           Decrementing {
+                                set mode [string range $mode 0 8]
+                                set mode [string tolower $mode]
+                                Deputs "Mode:$mode\tProtocol:$protocol\tConfig:$conf"
+                                set start [ eval lindex $conf 1]
+                                set count [ eval lindex $conf 2]
+                                set step  [ eval lindex $conf 3]
+                                Deputs "start:$start count:$count step:$step"
+                                ixNet setMultiAttrs $obj \
+                                    -valueType $mode \
+                                    -countValue $count \
+                                    -stepValue $step \
+                                    -startValue $start
+                                    ixNet commit
+                           }
+                           Commit {
+                              ixNet setMultiAttrs $obj \
+                                 -valueType singleValue \
+                                 -singleValue $conf
+                              ixNet commit
+                           }
+                        }
+                    }		                                                               		  
+                }
+		    }
+        }
+    }
+    
     Deputs Step150    
     ixNet commit
 	if { [ info exists rcv_ports ] } {
@@ -4054,7 +4231,7 @@ body Ipv4Hdr::config { args } {
     # set EFrag [ list may donot ]
     # set ELastFrag [ list last more ]
     set EQos [ list tos dscp ]
-    
+    Deputs "this: $this"
 	set hopopt 0
 	set icmp 1
 	set igmp 2
