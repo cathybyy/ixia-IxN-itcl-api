@@ -1,7 +1,7 @@
 
 # Copyright (c) Ixia technologies 2011-2012, Inc.
 
-set releaseVersion 4.70
+set releaseVersion 4.71
 #===============================================================================
 # Change made
 # ==2011==
@@ -269,7 +269,7 @@ set releaseVersion 4.70
 # Version 4.68
 #       125. Add Rfc3918 JoinLeaveDelay
 # Version 4.70
-#       125. loadconfig for HW ruby.No objects automatic generated.
+#       125. load config for HW ruby. no objects automatic generated.
 
 proc GetEnvTcl { product } {
    
@@ -482,7 +482,7 @@ proc GetAllPortObj {} {
 }
 
 proc GetValidHandleObj { objType handle { parentHnd "" } } {
-set tag "GetValidHandleObj [info script]"
+    set tag "GetValidHandleObj [info script]"
     Deputs "----- TAG: $tag -----"
 	set index 0
 	if { [ catch {
@@ -560,7 +560,6 @@ set tag "GetValidHandleObj [info script]"
 			}
 			return ""
 		}
-
 		bgp {
 			set protocols [ixNet getL $parentHnd protocols]
 			set protocol [ixNet getL $protocols bgp]

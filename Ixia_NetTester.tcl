@@ -61,8 +61,8 @@ class Tester {
     proc apply_traffic {} {}
     proc start_traffic { { restartCaptureJudgement 1 } } {}
     proc stop_traffic {} {}
-    proc start_router {} {}
-    proc stop_router {} {}
+    proc start_router { args } {}
+    proc stop_router { args } {}
     proc start_capture { args } {}
     proc stop_capture { { wait 3000} } {}
     proc save_capture { args } {}
@@ -219,21 +219,235 @@ Deputs "stop timeout:$timeout"
     return [ GetStandardReturnHeader ]
 }
 
-proc Tester::start_router {} {
+proc Tester::start_router { args } {
     set tag "proc Tester::start_router [info script]"
     Deputs "----- TAG: $tag -----"
+    set device_type ""
+    foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -device_type {
+                set device_type [string tolower $value]
+            }
+
+        }
+    }
     
 #	ixTclNet::StartProtocols
-	ixNet exec startAllProtocols
+    if { $device_type == ""} {
+        ixNet exec startAllProtocols
+    } else {
+        set device_list ""
+        set root [ixNet getRoot]
+        set vport_list [ixNet getL $root vport]
+        foreach vport_handle $vport_list {
+            set vport_protocols     [ixNet getL $vport_handle protocols]
+            set vport_protocolStack [ixNet getL $vport_handle protocolStack]
+            
+            switch -exact -- $device_type {
+                bgp {                    
+                    set bgpH [ixNet getL $vport_protocols bgp]
+                    if {[ixNet getA $bgpH  -enabled] == "true" } {
+                        lappend device_list $bgpH
+                    }
+                }
+                isis {
+                    set isisH [ixNet getL $vport_protocols isis]
+                    if {[ixNet getA $bgpH  -enabled] == "true" } {
+                        lappend device_list $isisH
+                    }
+                }
+                ldp {
+                    set ldpH [ixNet getL $vport_protocols ldp]
+                    if {[ixNet getA $ldpH  -enabled] == "true" } {
+                        lappend device_list $ldpH
+                    }
+                }
+				igmp {
+                    set igmpH [ixNet getL $vport_protocols igmp]
+                    if {[ixNet getA $igmpH  -enabled] == "true" } {
+                        lappend device_list $igmpH
+                    }
+                }
+				mld {
+                    set mldH [ixNet getL $vport_protocols mld]
+                    if {[ixNet getA $mldH  -enabled] == "true" } {
+                        lappend device_list $mldH
+                    }
+                }
+				rip {
+                    set ripH [ixNet getL $vport_protocols rip]
+                    if {[ixNet getA $ripH  -enabled] == "true" } {
+                        lappend device_list $ripH
+                    }
+                }
+				ripng {
+                    set ripngH [ixNet getL $vport_protocols ripng]
+                    if {[ixNet getA $ripngH  -enabled] == "true" } {
+                        lappend device_list $ripngH
+                    }
+                }
+                ospfv2 {
+                    set ospfH [ixNet getL $vport_protocols ospf]
+                    if {[ixNet getA $ospfH  -enabled] == "true" } {
+                        lappend device_list $ospfH
+                    }
+                }
+                ospfv3 {
+                    set ospfV3H [ixNet getL $vport_protocols ospfV3]
+                    if {[ixNet getA $ospfV3H  -enabled] == "true" } {
+                        lappend device_list $ospfV3H
+                    }
+                }
+                dhcp {
+                    set ethernetH_list [ixNet getL vport_protocolStack ethernet ]
+					if {$ethernetH_list != "" } {
+						foreach ethernetH $ethernetH_list {	
+							set dhcpH [ixNet getL $ethernetH dhcpEndpoint]
+							if { $dhcpH != "" } {
+								lappend device_list $ethernetH
+							}                                               
+						}
+					}
+                   
+                }
+                pppox {
+                    set ethernetH_list [ixNet getL vport_protocolStack ethernet ]
+					if {$ethernetH_list != "" } {
+						foreach ethernetH $ethernetH_list {	
+							set pppoxH [ixNet getL $ethernetH pppoxEndpoint]
+							if { $pppoxH != "" } {
+								lappend device_list $ethernetH
+							}                                               
+						}
+					}
+                }
+
+            }
+        }
+        
+        foreach deviceH $device_list {
+            ixNet exec start $deviceH
+        }
+    }
+	
     return [ GetStandardReturnHeader ]
 }
 
-proc Tester::stop_router {} {
+proc Tester::stop_router { args } {
     set tag "proc Tester::stop_router [info script]"
     Deputs "----- TAG: $tag -----"
     
 	#ixTclNet::StopProtocols
-    ixNet exec stopAllProtocols
+    #ixNet exec stopAllProtocols
+    set device_type ""
+    foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -device_type {
+                set device_type [string tolower $value]
+            }
+
+        }
+    }
+    
+#	ixTclNet::StartProtocols
+    if { $device_type == ""} {
+        ixNet exec stopAllProtocols
+    } else {
+        set device_list ""
+        set root [ixNet getRoot]
+        set vport_list [ixNet getL $root vport]
+        foreach vport_handle $vport_list {
+            set vport_protocols     [ixNet getL $vport_handle protocols]
+            set vport_protocolStack [ixNet getL $vport_handle protocolStack]
+            
+            switch -exact -- $device_type {
+                bgp {                    
+                    set bgpH [ixNet getL $vport_protocols bgp]
+                    if {[ixNet getA $bgpH  -enabled] == "true" } {
+                        lappend device_list $bgpH
+                    }
+                }
+                isis {
+                    set isisH [ixNet getL $vport_protocols isis]
+                    if {[ixNet getA $bgpH  -enabled] == "true" } {
+                        lappend device_list $isisH
+                    }
+                }
+                ldp {
+                    set ldpH [ixNet getL $vport_protocols ldp]
+                    if {[ixNet getA $ldpH  -enabled] == "true" } {
+                        lappend device_list $ldpH
+                    }
+                }
+				igmp {
+                    set igmpH [ixNet getL $vport_protocols igmp]
+                    if {[ixNet getA $igmpH  -enabled] == "true" } {
+                        lappend device_list $igmpH
+                    }
+                }
+				mld {
+                    set mldH [ixNet getL $vport_protocols mld]
+                    if {[ixNet getA $mldH  -enabled] == "true" } {
+                        lappend device_list $mldH
+                    }
+                }
+				rip {
+                    set ripH [ixNet getL $vport_protocols rip]
+                    if {[ixNet getA $ripH  -enabled] == "true" } {
+                        lappend device_list $ripH
+                    }
+                }
+				ripng {
+                    set ripngH [ixNet getL $vport_protocols ripng]
+                    if {[ixNet getA $ripngH  -enabled] == "true" } {
+                        lappend device_list $ripngH
+                    }
+                }
+                ospfv2 {
+                    set ospfH [ixNet getL $vport_protocols ospf]
+                    if {[ixNet getA $ospfH  -enabled] == "true" } {
+                        lappend device_list $ospfH
+                    }
+                }
+                ospfv3 {
+                    set ospfV3H [ixNet getL $vport_protocols ospfV3]
+                    if {[ixNet getA $ospfV3H  -enabled] == "true" } {
+                        lappend device_list $ospfV3H
+                    }
+                }
+                dhcp {
+                    set ethernetH_list [ixNet getL vport_protocolStack ethernet ]
+					if {$ethernetH_list != "" } {
+						foreach ethernetH $ethernetH_list {							
+							set dhcpH [ixNet getL $ethernetH dhcpEndpoint]
+							if { $dhcpH != "" } {
+								lappend device_list $ethernetH
+							}                                               							
+						}
+					}
+                   
+                }
+                pppox {
+                    set ethernetH_list [ixNet getL vport_protocolStack ethernet ]
+					if {$ethernetH_list != "" } {
+						foreach ethernetH $ethernetH_list {	
+							set pppoxH [ixNet getL $ethernetH pppoxEndpoint]
+							if { $pppoxH != "" } {
+								lappend device_list $ethernetH
+							} 
+                        }						
+                    }
+                }
+
+            }
+        }
+        
+        foreach deviceH $device_list {
+            ixNet exec stop $deviceH
+        }
+    }
     return [ GetStandardReturnHeader ]
 }
 

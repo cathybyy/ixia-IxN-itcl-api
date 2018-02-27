@@ -93,6 +93,8 @@
 #       46. modify Host.enable|disable, add hostInfo for 3918
 # Version 2.18.4.70
 #       47. modify for loadconfigmode
+# Version 2.19.4.71
+#       48. add start_router, stop_router
 
 class Port {
     inherit NetObject
@@ -103,7 +105,9 @@ class Port {
     method ping { args } {}
     method reset {} {}
 	method start_traffic {} {}
-	method stop_traffic {} {} 
+	method stop_traffic {} {}
+    method start_router { args } {}
+	method stop_router { args } {}    
     method break_link {} {}
     method restore_link {} {}
 	method set_port_stream_load { args } {}
@@ -194,6 +198,19 @@ class Port {
     public variable inter_burst_gap
 	public variable PortNo
 	public variable port_name
+    
+    #loadconfig device list
+    public variable deviceList
+    public variable bgpList
+    public variable isisList
+    public variable ldpList
+    public variable ospfList
+    public variable ospfv3List
+    public variable dhcpList
+    public variable pppoxList
+ 
+    
+    
 }
 
 body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0} } {
@@ -201,7 +218,8 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
     set tag "body Port::ctor [info script]"
     Deputs "----- TAG: $tag -----"
     
-    global LoadConfigMode
+    global LoadConfigMode   
+    
 	set port_name $this
     # -- Check for Multiuser Login
 	set portObjList [ GetAllPortObj ]
@@ -282,6 +300,220 @@ body Port::constructor { { hw_id NULL } { medium NULL } { hPort NULL } {force 0}
            
         }  
     }
+    
+    if { $LoadConfigMode } {
+        array set deviceList  ""
+        array set bgpList     ""
+        array set isisList    ""
+        array set ldpList     ""
+        array set ospfList    ""
+        array set ospfv3List  ""
+        array set dhcpList    ""
+        array set pppoxList   ""
+		array set igmpList    ""
+		array set mldList     ""
+		array set ripList     ""
+		array set ripngList   ""
+		
+    Deputs "loadconfig create devicelist"    
+        set vport_protocols     [ixNet getL $handle protocols]
+        set vport_protocolStack [ixNet getL $handle protocolStack]
+        
+       
+    #bgp                     
+        set bgpH [ixNet getL $vport_protocols bgp]
+        if {[ixNet getA $bgpH  -enabled] == "true" } {
+            #only can start bgpH, can disable bgpNR
+            set deviceList(bgp) $bgpH
+            foreach bgpNR [ixNet getL $bgpH neighborRange] {
+			    if { [catch {
+			        set bgpNR_name [ixNet getA [ixNet getA $bgpNR -interfaces] -description]
+                    set bgpList($bgpNR_name) $bgpNR 
+			    } ] } {
+				   Deputs " No interface bind to bgp"
+				}
+               
+            }
+        }
+    
+    #isis 
+        set isisH [ixNet getL $vport_protocols isis]
+        if {[ixNet getA $isisH  -enabled] == "true" } {
+           #only can start isisH, can disable isisR
+            set deviceList(isis) $isisH
+            foreach isisR [ixNet getL $isisH router] {
+                # set isisIntface [lindex [ixNet getL $isisR interface] 0]
+                # set isisR_name [ixNet getA [ixNet getA $isisIntface -interfaceId] -description]
+                # set isisList($isisR_name) $isisR
+			    if { [catch {
+					set isisIntface [lindex [ixNet getL $isisR interface] 0]
+                    set isisR_name [ixNet getA [ixNet getA $isisIntface -interfaceId] -description]
+                    set isisList($isisR_name) $isisR
+				} ] } {
+				   Deputs " No interface bind to isis"
+				}
+            }
+        }
+    
+    #ldp 
+        set ldpH [ixNet getL $vport_protocols ldp]
+        if {[ixNet getA $ldpH  -enabled] == "true" } {
+           
+            set deviceList(ldp) $ldpH
+			foreach ldpR [ixNet getL $ldpH router] {
+                # set ldpIntface [lindex [ixNet getL $ldpR interface] 0]
+                # set ldpR_name [ixNet getA [ixNet getA $ldpIntface -protocolInterface] -description]
+                # set ldpList($ldpR_name) $ldpR
+			    if { [catch {
+					set ldpIntface [lindex [ixNet getL $ldpR interface] 0]
+                    set ldpR_name [ixNet getA [ixNet getA $ldpIntface -protocolInterface] -description]
+                    set ldpList($ldpR_name) $ldpR
+				} ] } {
+				   Deputs " No interface bind to ldp"
+				}
+            }
+        }
+    #igmp 
+        set igmpH [ixNet getL $vport_protocols igmp]
+        if {[ixNet getA $igmpH  -enabled] == "true" } {
+           #only can start isisH, can disable isisR
+            set deviceList(igmp) $igmpH
+            foreach igmpR [ixNet getL $igmpH host] { 
+                if { [catch {			
+                   set igmpR_name  [ixNet getA [ixNet getA $igmpR -interfaces] -description]
+                   set igmpList($igmpR_name) $igmpR
+			    } ] } {
+				   Deputs " No interface bind to igmp"
+				}
+            }
+        }
+		
+	#mld 
+        set mldH [ixNet getL $vport_protocols mld]
+        if {[ixNet getA $mldH  -enabled] == "true" } {
+           #only can start mldH, can disable mldR
+            set deviceList(mld) $mldH
+            foreach mldR [ixNet getL $mldH host] {               
+               # set mldR_name  [ixNet getA [ixNet getA $mldR -interfaces] -description]
+               # set mldList($mldR_name) $mldR
+			    if { [catch {			
+                   set mldR_name  [ixNet getA [ixNet getA $mldR -interfaces] -description]
+                   set mldList($mldR_name) $mldR
+			    } ] } {
+				   Deputs " No interface bind to mld"
+				}
+            }
+        }
+	
+	#rip 
+        set ripH [ixNet getL $vport_protocols rip]
+        if {[ixNet getA $ripH  -enabled] == "true" } {
+           #only can start ripH, can disable ripR
+            set deviceList(rip) $ripH
+            foreach ripR [ixNet getL $ripH router] {
+              
+               # set ripR_name [ixNet getA [ixNet getA $ripR -interfaceId] -description]
+               # set ripList($ripR_name) $ripR
+			    if { [catch {			
+                   set ripR_name [ixNet getA [ixNet getA $ripR -interfaceId] -description]
+                   set ripList($ripR_name) $ripR
+			    } ] } {
+				   Deputs " No interface bind to rip"
+				}
+            }
+        }
+		
+	#ripng 
+        set ripngH [ixNet getL $vport_protocols ripng]
+        if {[ixNet getA $ripngH  -enabled] == "true" } {
+           #only can start ripngH, can disable ripngR
+            set deviceList(ripng) $ripngH
+            foreach ripngR [ixNet getL $ripngH router] {
+               # set ripngIntface [lindex [ixNet getL $ripngR interface] 0]
+               # set ripngR_name [ixNet getA [ixNet getA $ripngIntface -interfaceId] -description]
+               # set ripngList($ripngR_name) $ripngR
+			    if { [catch {			
+                   set ripngIntface [lindex [ixNet getL $ripngR interface] 0]
+                   set ripngR_name [ixNet getA [ixNet getA $ripngIntface -interfaceId] -description]
+                   set ripngList($ripngR_name) $ripngR
+			    } ] } {
+				   Deputs " No interface bind to ripng"
+				}
+            }
+        }
+		
+    #ospfv2 
+        set ospfH [ixNet getL $vport_protocols ospf]
+        if {[ixNet getA $ospfH  -enabled] == "true" } {
+           
+            set deviceList(ospf) $ospfH
+            foreach ospfR [ixNet getL $ospfH router] {
+               # set ospfIntface [lindex [ixNet getL $ospfR interface] 0]
+               # set ospfR_name [ixNet getA [ixNet getA $ospfIntface -interfaces] -description]
+               # set ospfList($ospfR_name) $ospfR
+			    if { [catch {			
+                    set ospfIntface [lindex [ixNet getL $ospfR interface] 0]
+                    set ospfR_name [ixNet getA [ixNet getA $ospfIntface -interfaces] -description]
+                    set ospfList($ospfR_name) $ospfR
+			    } ] } {
+				   Deputs " No interface bind to ospf"
+				}
+            }
+        }
+    
+    #ospfv3 
+        set ospfV3H [ixNet getL $vport_protocols ospfV3]
+        if {[ixNet getA $ospfV3H  -enabled] == "true" } {
+            set deviceList(ospfv3) $ospfV3H
+            foreach ospfV3R [ixNet getL $ospfV3H router] {
+               # set ospfV3Intface [lindex [ixNet getL $ospfV3R interface] 0]
+               # set ospfV3R_name [ixNet getA [ixNet getA $ospfV3Intface -interfaces] -description]
+               # set ospfv3List($ospfV3R_name) $ospfV3R
+			    if { [catch {			
+                   set ospfV3Intface [lindex [ixNet getL $ospfV3R interface] 0]
+                   set ospfV3R_name [ixNet getA [ixNet getA $ospfV3Intface -interfaces] -description]
+                   set ospfv3List($ospfV3R_name) $ospfV3R
+			    } ] } {
+				   Deputs " No interface bind to ospfv3"
+				}
+            }
+        }
+    
+    #dhcp 
+        set ethernetH_list [ixNet getL $vport_protocolStack ethernet ]
+        if {$ethernetH_list != "" } {
+            foreach ethernetH $ethernetH_list {
+                set dhcpH [ixNet getL $ethernetH dhcpEndpoint]
+                if { $dhcpH != "" } {
+                    set deviceList(dhcp) $dhcpH
+                    foreach dhcpR [ixNet getL $dhcpH range] {
+                       set dhcpR_name [ixNet getA [ixNet getL $dhcpR dhcpRange] -name]
+                       set dhcpList($dhcpR_name) $dhcpR
+                    }
+                } 
+            }                    
+        }
+       
+    
+    #pppox 
+        set ethernetH_list [ixNet getL $vport_protocolStack ethernet ]
+        if {$ethernetH_list != "" } {
+            foreach ethernetH $ethernetH_list {
+                set pppoxH [ixNet getL $ethernetH pppoxEndpoint]
+                if { $pppoxH != "" } {
+                    set deviceList(pppox) $pppoxH
+                    foreach pppoxR [ixNet getL $pppoxH range] {
+                       set pppoxR_name [ixNet getA [ixNet getL $pppoxR pppoxRange] -name]
+                       set pppoxList($pppoxR_name) $pppoxR
+                    }
+                }                    
+            }
+        }
+
+            
+        
+    } 
+    
 	set intf_mac 	 ""
 	set intf_ipv4	 ""
 	set inter_burst_gap 12
@@ -1516,6 +1748,416 @@ Deputs "flowList: $flowList"
 Deputs "All streams are stopped!"
 
 		return [ GetStandardReturnHeader ]
+}
+
+body Port::start_router { args } {
+    set tag "body Port::start_router [info script]"
+Deputs "----- TAG: $tag -----"
+    set device_type_list ""
+    set device_id_list ""
+    foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -device_type {
+                set device_type_list $value
+            }
+            -device_id {
+                set device_id_list  $value
+            }
+
+        }
+    }
+    
+
+    
+    set device_list ""
+    set root [ixNet getRoot]
+   
+    set vport_protocols     [ixNet getL $handle protocols]
+    set vport_protocolStack [ixNet getL $handle protocolStack]
+    
+	if { $device_type_list !=  "" } {
+	    foreach device_type $device_type_list {
+		    set device_type [string tolower $device_type]
+			switch -exact -- $device_type {
+				bgp {                    
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(bgp) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size bgpList] != 1 } {
+							foreach {dName dHandle} [array get bgpList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(bgp)
+						}
+					}
+					
+				}
+				isis {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(isis) 
+							Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size isisList] != 1 } {
+							foreach {dName dHandle} [array get isisList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(isis)
+						}
+					}
+				}
+				ldp {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(ldp) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size ldpList] != 1 } {
+							foreach {dName dHandle} [array get ldpList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(ldp)
+						}
+					}
+				}
+				igmp {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(igmp) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size igmpList] != 1 } {
+							foreach {dName dHandle} [array get igmpList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(igmp)
+						}
+					}
+				}
+				mld {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(mld) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size mldList] != 1 } {
+							foreach {dName dHandle} [array get mldList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(mld)
+						}
+					}
+				}
+				rip {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(rip) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size ripList] != 1 } {
+							foreach {dName dHandle} [array get ripList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(rip)
+						}
+					}
+				}
+				ripng {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle deviceList(ripng) 
+						   Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size ripngList] != 1 } {
+							foreach {dName dHandle} [array get ripngList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(ripng)
+						}
+					}
+				}
+				ospfv2 {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(ospf)
+		 Deputs "deviceHandle:$deviceHandle"                   
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size ospfList] != 1 } {
+							foreach {dName dHandle} [array get ospfList ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(ospf)
+						}
+					}
+				}
+				ospfv3 {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(ospfv3) 
+							Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle
+						}
+					} else {
+						if { [array size ospfv3List] != 1 } {
+							foreach {dName dHandle} [array get ospfv3List ] {
+								if { [lsearch -exact $device_id_list $dName] } {
+									ixNet setA $dHandle -enabled true
+									ixNet commit
+								} else {
+									ixNet setA $dHandle -enabled false
+									ixNet commit
+								}
+							}
+							ixNet exec start  $deviceList(ospfv3)
+						}
+					}
+				}
+				dhcp {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(dhcp) 
+							Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle async
+						}
+					} else {
+						if { [array size dhcpList] != 1 } {
+							foreach {dName dHandle} [array get dhcpList ] {
+								ixNet exec start  $dHandle   async
+							}
+							
+						}
+					}
+				   
+				}
+				pppox {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(pppox) 
+							Deputs "deviceHandle:$deviceHandle"
+						   ixNet exec start $deviceHandle async
+						}
+					} else {
+						if { [array size pppoxList] != 1 } {
+							foreach {dName dHandle} [array get pppoxList ] {
+								ixNet exec start  $dHandle   async
+							}
+							
+						}
+					}
+				}
+
+			}
+		}
+	} else {
+	    if { [array size deviceList] != 1 } {
+			foreach {dName dHandle} [array get deviceList ] {
+				ixNet exec start  $dHandle   
+			}
+			
+		}
+	}
+
+    
+    
+	return [ GetStandardReturnHeader ]
+}
+
+body Port::stop_router { args } {
+    set tag "body Port::stop_router [info script]"
+Deputs "----- TAG: $tag -----"
+    set device_type_list ""
+    set device_id_list ""
+    foreach { key value } $args {
+        set key [string tolower $key]
+        switch -exact -- $key {
+            -device_type {
+                set device_type_list $value
+            }
+            -device_id {
+                set device_id_list  $value
+            }
+
+        }
+    }
+    
+
+    
+    set device_list ""
+    set root [ixNet getRoot]
+   
+    set vport_protocols     [ixNet getL $handle protocols]
+    set vport_protocolStack [ixNet getL $handle protocolStack]
+    if { $device_type_list !=  "" } {
+	    foreach device_type $device_type_list {
+		    set device_type [string tolower $device_type]
+			switch -exact -- $device_type {
+				bgp { 
+					catch {
+					   set deviceHandle $deviceList(bgp) 
+					   ixNet exec stop $deviceHandle
+					}        
+				   
+					
+				}
+				isis {
+					catch {
+					   set deviceHandle $deviceList(isis) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				ldp {
+					catch {
+					   set deviceHandle $deviceList(ldp) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				igmp {
+					catch {
+					   set deviceHandle $deviceList(igmp) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				mld {
+					catch {
+					   set deviceHandle $deviceList(mld) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				rip {
+					catch {
+					   set deviceHandle $deviceList(rip) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				ripng {
+					catch {
+					   set deviceHandle $deviceList(ripng) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				ospfv2 {
+					catch {
+					   set deviceHandle $deviceList(ospf) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				ospfv3 {
+					catch {
+					   set deviceHandle $deviceList(ospfv3) 
+					   ixNet exec stop $deviceHandle
+					}
+				}
+				dhcp {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(dhcp) 
+						   ixNet exec stop $deviceHandle
+						}
+					} else {
+						if { [array size dhcpList] != 1 } {
+							foreach {dName dHandle} [array get dhcpList ] {
+								ixNet exec stop  $dHandle   async
+							}
+							
+						}
+					}
+				   
+				}
+				pppox {
+					if { $device_id_list == "" } {
+						catch {
+						   set deviceHandle $deviceList(pppox) 
+						   ixNet exec stop $deviceHandle
+						}
+					} else {
+						if { [array size pppoxList] != 1 } {
+							foreach {dName dHandle} [array get pppoxList ] {
+								ixNet exec stop $dHandle   async
+							}
+							
+						}
+					}
+				}
+            }
+		}
+	} else {
+	    if { [array size deviceList] != 1 } {
+			foreach {dName dHandle} [array get deviceList ] {
+				ixNet exec stop  $dHandle   
+			}
+			
+		}
+	}
+    
+    
+	return [ GetStandardReturnHeader ]
 }
 
 body Port::break_link {} {
